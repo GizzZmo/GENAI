@@ -1,6 +1,14 @@
-# CIAHackingTools
-WikiLeaks Vault 7 CIA Hacking Tools 
+# GENAI — The Constantine Universe
 
-ART & SCIENCE, MIT/Harvard/Berkley
+## Production Bible
+
+See [PRODUCTION_BIBLE.md](PRODUCTION_BIBLE.md) for the full expanded production bible covering world structure, technology, characters, environments, story, and team guidelines.
+
+---
+
+## CIAHackingTools
+WikiLeaks Vault 7 CIA Hacking Tools
+
+ART & SCIENCE, MIT/Harvard/Berkeley
 
 Use at own risk.
