@@ -1,0 +1,67 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Composite Action: michael-shield
+# Runs a targeted secret/security scan on a specific file or directory.
+# Used by Michael's Sentinel job and by external callers.
+# ─────────────────────────────────────────────────────────────────────────────
+name: "⚔️ Michael's Shield — Security Scan"
+description: "Scans files for leaked secrets and common security anti-patterns."
+
+inputs:
+  path:
+    description: "Path to scan (relative to repo root)"
+    required: false
+    default: "."
+  fail_on_finding:
+    description: "Exit with failure if secrets are detected"
+    required: false
+    default: "true"
+
+outputs:
+  secrets_found:
+    description: "Number of secret patterns matched"
+    value: ${{ steps.scan.outputs.secrets_found }}
+  report:
+    description: "Plain-text scan report"
+    value: ${{ steps.scan.outputs.report }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "⚔️ Run Michael's Shield scan"
+      id: scan
+      shell: bash
+      run: |
+        TARGET="${{ inputs.path }}"
+        FOUND=0
+        REPORT=""
+
+        declare -A PATTERNS=(
+          ["AWS Access Key"]="AKIA[0-9A-Z]{16}"
+          ["Generic API Key"]="[Aa][Pp][Ii][_-]?[Kk][Ee][Yy]\s*[=:]\s*['\"][0-9a-zA-Z]{20,}['\"]"
+          ["Private Key Block"]="-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY"
+          ["GitHub Token"]="gh[pousr]_[A-Za-z0-9_]{36,}"
+          ["Slack Token"]="xox[baprs]-[0-9A-Za-z]{10,}"
+        )
+
+        for name in "${!PATTERNS[@]}"; do
+          pattern="${PATTERNS[$name]}"
+          matches=$(grep -rEn \
+            --include="*.html" --include="*.js" --include="*.css" \
+            --include="*.md" --include="*.yml" --include="*.json" \
+            --exclude-dir=".git" \
+            "$pattern" "$TARGET" 2>/dev/null || true)
+
+          if [ -n "$matches" ]; then
+            FOUND=$((FOUND + 1))
+            REPORT="${REPORT}DETECTED: $name\n"
+            echo "::warning::Michael's Shield: $name pattern matched in $TARGET"
+          fi
+        done
+
+        echo "secrets_found=$FOUND" >> "$GITHUB_OUTPUT"
+        echo "report=$REPORT"       >> "$GITHUB_OUTPUT"
+
+        if [ "$FOUND" -gt 0 ] && [ "${{ inputs.fail_on_finding }}" == "true" ]; then
+          echo "::error::Michael's Shield detected $FOUND secret pattern(s). Blocking."
+          exit 1
+        fi

@@ -1,0 +1,423 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# RAFAEL — The Healer Archangel
+# Role  : Maintenance, Quality & Repository Health
+# Domain: Stale triage · Link audit · Dependency review · Weekly health report
+#
+# Triggers:
+#   • schedule        — every Monday at 07:00 UTC
+#   • workflow_call   — invoked by the Archangels Orchestrator
+#   • workflow_dispatch — manual run with optional scope
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: "✨ Rafael — Healer Archangel"
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"    # Every Monday 07:00 UTC
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "Healing scope (all | stale | audit | links)"
+        required: false
+        default: "all"
+        type: choice
+        options: [all, stale, audit, links]
+      dry_run:
+        description: "Dry run — report only, no mutations"
+        required: false
+        default: "false"
+        type: boolean
+  workflow_call:
+    inputs:
+      scope:
+        description: "Healing scope"
+        required: false
+        default: "all"
+        type: string
+      dry_run:
+        description: "Dry run mode"
+        required: false
+        default: "false"
+        type: string
+    outputs:
+      heal_status:
+        description: "Healing status (pass | fail)"
+        value: ${{ jobs.report.outputs.heal_status }}
+
+concurrency:
+  group: rafael-healing
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+env:
+  AGENT: "✨  RAFAEL"
+  SCOPE: ${{ inputs.scope || 'all' }}
+  DRY_RUN: ${{ inputs.dry_run || 'false' }}
+
+# ────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1. DIAGNOSE — Stale issues & PR triage ────────────────────────────────
+  diagnose:
+    name: "🩺 Diagnose — Stale Issue & PR Triage"
+    runs-on: ubuntu-latest
+    if: |
+      inputs.scope == 'all' || inputs.scope == 'stale' ||
+      github.event_name == 'schedule'
+
+    steps:
+      - name: "📡 Summon Rafael"
+        run: |
+          echo "╔══════════════════════════════════════════════════════════╗"
+          echo "║  ✨  RAFAEL  —  HEALER ARCHANGEL                         ║"
+          echo "║  DIAGNOSE JOB  —  TRIAGING STALE ITEMS                  ║"
+          echo "╚══════════════════════════════════════════════════════════╝"
+          echo "Scope   : $SCOPE"
+          echo "Dry run : $DRY_RUN"
+
+      - name: "🩺 Stale issues and PRs"
+        uses: actions/stale@v9
+        with:
+          repo-token:                  ${{ secrets.GITHUB_TOKEN }}
+          days-before-issue-stale:     60
+          days-before-issue-close:     14
+          days-before-pr-stale:        30
+          days-before-pr-close:        7
+          stale-issue-label:           "stale"
+          stale-pr-label:              "stale"
+          close-issue-label:           "closed: stale"
+          close-pr-label:              "closed: stale"
+          stale-issue-message: |
+            ## ✨ Rafael — Healing Notice
+
+            This issue has been automatically marked as **stale** because it has not seen
+            activity in **60 days**.
+
+            It will be closed in **14 days** unless further activity occurs.
+
+            > *"Even wounds that seem forgotten can still be healed — but time is the cost."*
+            > — Rafael, Healer Archangel
+
+            ---
+            <sub>✨ Posted by the Rafael Agent Orchestrator</sub>
+          stale-pr-message: |
+            ## ✨ Rafael — Healing Notice
+
+            This pull request has been automatically marked as **stale** because it has not
+            seen activity in **30 days**.
+
+            It will be closed in **7 days** unless updated or reviewed.
+
+            > *"A signal left unresolved weakens the whole network."*
+            > — Rafael
+
+            ---
+            <sub>✨ Posted by the Rafael Agent Orchestrator</sub>
+          close-issue-message: |
+            ## ✨ Rafael — Closing Notice
+
+            This issue is being **closed automatically** due to inactivity.
+
+            If this issue is still relevant, please reopen it with updated context.
+
+            > *"Healing requires willingness. The door remains open."*
+            > — Rafael
+
+            ---
+            <sub>✨ Posted by the Rafael Agent Orchestrator</sub>
+          close-pr-message: |
+            ## ✨ Rafael — Closing Notice
+
+            This pull request is being **closed automatically** due to inactivity.
+
+            Please feel free to reopen with updated changes.
+
+            > *"No contribution is truly lost. It waits in the log."*
+            > — Rafael
+
+            ---
+            <sub>✨ Posted by the Rafael Agent Orchestrator</sub>
+          exempt-issue-labels:     "pinned,security,critical,in-progress"
+          exempt-pr-labels:        "pinned,security,critical,in-progress,dependencies"
+          operations-per-run:      50
+          debug-only:              ${{ env.DRY_RUN == 'true' }}
+
+  # ── 2. AUDIT — Repository structure & asset health ────────────────────────
+  audit:
+    name: "🔬 Audit — Repository Health Check"
+    runs-on: ubuntu-latest
+    if: |
+      inputs.scope == 'all' || inputs.scope == 'audit' ||
+      github.event_name == 'schedule'
+
+    steps:
+      - name: "🔽 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "📊 Repository structure audit"
+        id: structure_audit
+        run: |
+          echo "## ✨ Rafael — Repository Audit" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # File size audit — warn on files > 500 KB
+          echo "### 📦 Large Files (> 500 KB)" >> "$GITHUB_STEP_SUMMARY"
+          LARGE=$(find . -not -path './.git/*' -type f -size +500k 2>/dev/null)
+          if [ -n "$LARGE" ]; then
+            echo "| File | Size |" >> "$GITHUB_STEP_SUMMARY"
+            echo "|------|------|" >> "$GITHUB_STEP_SUMMARY"
+            while IFS= read -r f; do
+              SIZE=$(du -sh "$f" | cut -f1)
+              echo "| \`$f\` | $SIZE |" >> "$GITHUB_STEP_SUMMARY"
+            done <<< "$LARGE"
+          else
+            echo "✅ No files exceed 500 KB." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # Duplicate file names (may indicate disorganisation)
+          echo "### 🔍 Duplicate File Names" >> "$GITHUB_STEP_SUMMARY"
+          DUPES=$(find . -not -path './.git/*' -type f -printf '%f\n' 2>/dev/null | sort | uniq -d | head -20)
+          if [ -n "$DUPES" ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$DUPES" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ No duplicate file names found." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          # HTML files missing <title> or lang attribute
+          echo "### 🌐 HTML Accessibility Audit" >> "$GITHUB_STEP_SUMMARY"
+          HTML_ISSUES=0
+          for f in $(find . -name '*.html' -not -path './.git/*'); do
+            if ! grep -qi '<title>' "$f"; then
+              echo "::warning file=$f::Missing <title> element"
+              HTML_ISSUES=$((HTML_ISSUES + 1))
+            fi
+            if ! grep -qi 'lang=' "$f"; then
+              echo "::warning file=$f::Missing lang attribute on <html>"
+              HTML_ISSUES=$((HTML_ISSUES + 1))
+            fi
+          done
+          if [ $HTML_ISSUES -eq 0 ]; then
+            echo "✅ All HTML files have \`<title>\` and \`lang\` attribute." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "⚠️ $HTML_ISSUES HTML accessibility issue(s) found — see annotations." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: "📋 Asset inventory report"
+        run: |
+          {
+            echo ""
+            echo "### 📂 Asset Inventory"
+            echo ""
+            echo "| Directory | Files | Total Size |"
+            echo "|-----------|-------|------------|"
+
+            for dir in . bootstrap css static vault7 highlighter; do
+              if [ -d "$dir" ]; then
+                count=$(find "$dir" -maxdepth 3 -not -path './.git/*' -type f 2>/dev/null | wc -l | tr -d ' ')
+                size=$(du -sh "$dir" 2>/dev/null | cut -f1)
+                echo "| \`$dir/\` | $count | $size |"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 3. LINK-HEALER — Check for broken internal links in HTML ──────────────
+  link_healer:
+    name: "🔗 Link Healer — Internal Link Audit"
+    runs-on: ubuntu-latest
+    if: |
+      inputs.scope == 'all' || inputs.scope == 'links' ||
+      github.event_name == 'schedule'
+
+    steps:
+      - name: "🔽 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "⚙️  Setup Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "🔗 Scan HTML for broken internal hrefs/src"
+        run: |
+          echo "## ✨ Rafael — Link Audit" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### 🔗 Internal Link Check" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          BROKEN=0
+          CHECKED=0
+
+          # Extract relative hrefs and src values from HTML files
+          for html in $(find . -name '*.html' -not -path './.git/*'); do
+            dir=$(dirname "$html")
+
+            # Extract all href and src values that look like relative paths
+            while IFS= read -r ref; do
+              # Skip http, https, mailto, #anchor, empty, template vars
+              if echo "$ref" | grep -qE '^(https?:|mailto:|#|\{\{|javascript:)'; then
+                continue
+              fi
+              if [ -z "$ref" ]; then continue; fi
+
+              # Resolve relative to file's directory
+              target="$dir/$ref"
+              # Normalise (remove ../ sequences simply)
+              target=$(realpath --relative-to=. "$target" 2>/dev/null || echo "$target")
+
+              CHECKED=$((CHECKED + 1))
+              if [ ! -e "$target" ]; then
+                echo "| \`$html\` | \`$ref\` | ❌ Not found |" >> "$GITHUB_STEP_SUMMARY"
+                echo "::warning file=$html::Broken reference: $ref"
+                BROKEN=$((BROKEN + 1))
+              fi
+            done < <(grep -oP '(?<=href="|src=")[^"]+' "$html" 2>/dev/null || true)
+          done
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Checked:** $CHECKED references | **Broken:** $BROKEN" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ $BROKEN -eq 0 ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "✅ All internal references are intact." >> "$GITHUB_STEP_SUMMARY"
+          fi
+        continue-on-error: true
+
+  # ── 4. HEALTH-REPORT — Weekly consolidated digest ─────────────────────────
+  health_report:
+    name: "💊 Health Report — Weekly Digest"
+    runs-on: ubuntu-latest
+    needs: [diagnose, audit, link_healer]
+    if: always() && github.event_name == 'schedule'
+
+    steps:
+      - name: "🔽 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "📊 Generate weekly health report issue"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const now = new Date();
+            const week = `${now.getFullYear()}-W${String(
+              Math.ceil((now - new Date(now.getFullYear(), 0, 1)) / 604800000)
+            ).padStart(2, '0')}`;
+
+            const diagResult = '${{ needs.diagnose.result }}';
+            const auditResult = '${{ needs.audit.result }}';
+            const linkResult  = '${{ needs.link_healer.result }}';
+
+            const statusIcon = r => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : '❌';
+
+            const body = [
+              `## ✨ Rafael — Weekly Health Report ${week}`,
+              ``,
+              `Automated maintenance completed for the **Constantine Universe** repository.`,
+              ``,
+              `| Healing Task | Status |`,
+              `|--------------|--------|`,
+              `| 🩺 Stale triage  | ${statusIcon(diagResult)} ${diagResult} |`,
+              `| 🔬 Repo audit    | ${statusIcon(auditResult)} ${auditResult} |`,
+              `| 🔗 Link healing  | ${statusIcon(linkResult)} ${linkResult} |`,
+              ``,
+              `> *"The network is only as strong as its weakest node.*`,
+              `> *Rafael walks among them, restoring what time has worn."*`,
+              ``,
+              `---`,
+              `<sub>✨ Auto-generated by the Rafael Agent Orchestrator · ${now.toISOString()}</sub>`,
+            ].join('\n');
+
+            // Check if a health report issue for this week already exists
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner:    context.repo.owner,
+              repo:     context.repo.repo,
+              labels:   'health-report',
+              state:    'open',
+              per_page: 5,
+            });
+
+            const existing = issues.find(i => i.title.includes(week));
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: existing.number,
+                body,
+              });
+              core.info(`Updated health report issue #${existing.number}`);
+            } else {
+              // Ensure label exists
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  name:  'health-report',
+                });
+              } catch {
+                await github.rest.issues.createLabel({
+                  owner:       context.repo.owner,
+                  repo:        context.repo.repo,
+                  name:        'health-report',
+                  color:       '0075ca',
+                  description: 'Weekly automated health report',
+                });
+              }
+
+              const { data: issue } = await github.rest.issues.create({
+                owner:  context.repo.owner,
+                repo:   context.repo.repo,
+                title:  `✨ Rafael — Health Report ${week}`,
+                body,
+                labels: ['health-report'],
+              });
+              core.info(`Created health report issue #${issue.number}`);
+            }
+
+  # ── 5. REPORT — Aggregate ─────────────────────────────────────────────────
+  report:
+    name: "📜 Rafael's Report"
+    runs-on: ubuntu-latest
+    needs: [diagnose, audit, link_healer]
+    if: always()
+    outputs:
+      heal_status: ${{ steps.conclude.outputs.heal_status }}
+
+    steps:
+      - name: "🏁 Conclude"
+        id: conclude
+        run: |
+          DIAG="${{ needs.diagnose.result }}"
+          AUDIT="${{ needs.audit.result }}"
+          LINK="${{ needs.link_healer.result }}"
+
+          # Consider skipped as acceptable (scope-limited run)
+          FAIL=0
+          [[ "$DIAG"  == "failure" ]] && FAIL=1
+          [[ "$AUDIT" == "failure" ]] && FAIL=1
+          [[ "$LINK"  == "failure" ]] && FAIL=1
+
+          if [ $FAIL -eq 0 ]; then STATUS="pass"; else STATUS="fail"; fi
+
+          echo "heal_status=$STATUS" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## ✨  Rafael — Final Report"
+            echo ""
+            echo "| Healing Task | Result |"
+            echo "|--------------|--------|"
+            echo "| 🩺 Diagnose (stale)  | $DIAG |"
+            echo "| 🔬 Audit (structure) | $AUDIT |"
+            echo "| 🔗 Link Healer       | $LINK |"
+            echo ""
+            echo "### Overall Heal Status: \`$STATUS\`"
+            echo ""
+            echo "> *\"What was broken has been tended. What remains will endure.\"*"
+          } >> "$GITHUB_STEP_SUMMARY"

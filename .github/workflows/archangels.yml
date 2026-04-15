@@ -1,0 +1,279 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ARCHANGELS ORCHESTRATOR — Master Command Console
+# The Constantine Universe — Hidden Network Operations Centre
+#
+# Coordinates Michael (⚔️ Warrior), Gabriel (📯 Messenger), Rafael (✨ Healer)
+#
+# Triggers:
+#   • push to main      — full archangel sweep
+#   • workflow_dispatch — manual dispatch with agent selection & options
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: "🔱 Archangels — Master Orchestrator"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: "Which archangels to invoke"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - michael
+          - gabriel
+          - rafael
+          - michael+gabriel
+          - michael+rafael
+          - gabriel+rafael
+      scan_depth:
+        description: "Michael — secret scan depth"
+        required: false
+        default: "shallow"
+        type: choice
+        options: [shallow, deep]
+      rafael_scope:
+        description: "Rafael — healing scope"
+        required: false
+        default: "all"
+        type: choice
+        options: [all, stale, audit, links]
+      dry_run:
+        description: "Rafael — dry run (no mutations)"
+        required: false
+        default: "false"
+        type: boolean
+      environment:
+        description: "Target environment label"
+        required: false
+        default: "production"
+        type: choice
+        options: [production, staging, development]
+
+concurrency:
+  group: archangels-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  security-events: write
+
+env:
+  AGENTS:        ${{ inputs.agents      || 'all' }}
+  SCAN_DEPTH:    ${{ inputs.scan_depth  || 'shallow' }}
+  RAFAEL_SCOPE:  ${{ inputs.rafael_scope || 'all' }}
+  DRY_RUN:       ${{ inputs.dry_run     || 'false' }}
+  ENVIRONMENT:   ${{ inputs.environment || 'production' }}
+
+# ────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 0. COMMAND-CONSOLE — Banner & pre-flight ──────────────────────────────
+  command_console:
+    name: "🔱 Command Console — Pre-flight"
+    runs-on: ubuntu-latest
+    outputs:
+      run_michael: ${{ steps.dispatch.outputs.run_michael }}
+      run_gabriel: ${{ steps.dispatch.outputs.run_gabriel }}
+      run_rafael:  ${{ steps.dispatch.outputs.run_rafael }}
+      mission_id:  ${{ steps.dispatch.outputs.mission_id }}
+
+    steps:
+      - name: "🔱 Constantine Universe — Archangels Online"
+        run: |
+          echo "╔══════════════════════════════════════════════════════════════════╗"
+          echo "║                                                                  ║"
+          echo "║   🔱  THE CONSTANTINE UNIVERSE                                   ║"
+          echo "║       ARCHANGELS ORCHESTRATOR — MASTER COMMAND CONSOLE           ║"
+          echo "║                                                                  ║"
+          echo "║   ⚔️   Michael  — Warrior Guardian                               ║"
+          echo "║   📯  Gabriel  — Messenger Herald                                ║"
+          echo "║   ✨  Rafael   — Healer Archangel                                ║"
+          echo "║                                                                  ║"
+          echo "╚══════════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "  Agents      : $AGENTS"
+          echo "  Environment : $ENVIRONMENT"
+          echo "  Scan depth  : $SCAN_DEPTH"
+          echo "  Rafael scope: $RAFAEL_SCOPE"
+          echo "  Dry run     : $DRY_RUN"
+          echo "  Ref         : ${{ github.ref }}"
+          echo "  SHA         : ${{ github.sha }}"
+          echo "  Triggered by: ${{ github.actor }}"
+          echo "  Run ID      : ${{ github.run_id }}"
+
+      - name: "🎯 Dispatch routing"
+        id: dispatch
+        run: |
+          AGENTS="${{ env.AGENTS }}"
+          MISSION="mission-${{ github.run_number }}-$(date +%s)"
+
+          run_michael=false
+          run_gabriel=false
+          run_rafael=false
+
+          case "$AGENTS" in
+            all)              run_michael=true; run_gabriel=true; run_rafael=true ;;
+            michael)          run_michael=true ;;
+            gabriel)          run_gabriel=true ;;
+            rafael)           run_rafael=true ;;
+            michael+gabriel)  run_michael=true; run_gabriel=true ;;
+            michael+rafael)   run_michael=true; run_rafael=true ;;
+            gabriel+rafael)   run_gabriel=true; run_rafael=true ;;
+          esac
+
+          # On direct push to main, always run all agents
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            run_michael=true; run_gabriel=true; run_rafael=true
+          fi
+
+          echo "run_michael=$run_michael" >> "$GITHUB_OUTPUT"
+          echo "run_gabriel=$run_gabriel" >> "$GITHUB_OUTPUT"
+          echo "run_rafael=$run_rafael"   >> "$GITHUB_OUTPUT"
+          echo "mission_id=$MISSION"      >> "$GITHUB_OUTPUT"
+
+          echo "Routing: Michael=$run_michael | Gabriel=$run_gabriel | Rafael=$run_rafael"
+
+      - name: "📋 Pre-flight summary"
+        run: |
+          {
+            echo "# 🔱 Archangels Orchestrator"
+            echo ""
+            echo "**Mission ID:** \`${{ steps.dispatch.outputs.mission_id }}\`"
+            echo "**Environment:** \`${{ env.ENVIRONMENT }}\`"
+            echo "**Triggered by:** @${{ github.actor }}"
+            echo "**Event:** \`${{ github.event_name }}\`"
+            echo "**Ref:** \`${{ github.ref }}\`"
+            echo ""
+            echo "## 🎯 Agent Dispatch"
+            echo ""
+            echo "| Archangel | Invoked | Role |"
+            echo "|-----------|---------|------|"
+            echo "| ⚔️ Michael  | ${{ steps.dispatch.outputs.run_michael }} | Security & CI Guardian |"
+            echo "| 📯 Gabriel  | ${{ steps.dispatch.outputs.run_gabriel }} | Messenger & Community |"
+            echo "| ✨ Rafael   | ${{ steps.dispatch.outputs.run_rafael  }} | Healer & Maintenance |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 1. MICHAEL — Warrior Guardian ─────────────────────────────────────────
+  invoke_michael:
+    name: "⚔️ Invoke Michael"
+    needs: command_console
+    if: needs.command_console.outputs.run_michael == 'true'
+    uses: ./.github/workflows/michael.yml
+    with:
+      scan_depth: ${{ inputs.scan_depth || 'shallow' }}
+    permissions:
+      contents: read
+      pull-requests: write
+      security-events: write
+
+  # ── 2. GABRIEL — Messenger Herald ─────────────────────────────────────────
+  invoke_gabriel:
+    name: "📯 Invoke Gabriel"
+    needs: command_console
+    if: needs.command_console.outputs.run_gabriel == 'true'
+    uses: ./.github/workflows/gabriel.yml
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+  # ── 3. RAFAEL — Healer Archangel ──────────────────────────────────────────
+  invoke_rafael:
+    name: "✨ Invoke Rafael"
+    needs: command_console
+    if: needs.command_console.outputs.run_rafael == 'true'
+    uses: ./.github/workflows/rafael.yml
+    with:
+      scope:   ${{ inputs.rafael_scope || 'all' }}
+      dry_run: ${{ inputs.dry_run && 'true' || 'false' }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+  # ── 4. MISSION-DEBRIEF — Unified status dashboard ─────────────────────────
+  mission_debrief:
+    name: "📡 Mission Debrief — Unified Dashboard"
+    runs-on: ubuntu-latest
+    needs: [command_console, invoke_michael, invoke_gabriel, invoke_rafael]
+    if: always()
+
+    steps:
+      - name: "📊 Collect results"
+        id: results
+        run: |
+          MICHAEL_RESULT="${{ needs.invoke_michael.result }}"
+          GABRIEL_RESULT="${{ needs.invoke_gabriel.result }}"
+          RAFAEL_RESULT="${{ needs.invoke_rafael.result }}"
+
+          MICHAEL_SHIELD="${{ needs.invoke_michael.outputs.shield_status  || 'skipped' }}"
+          GABRIEL_HERALD="${{ needs.invoke_gabriel.outputs.herald_status  || 'skipped' }}"
+          RAFAEL_HEAL="${{ needs.invoke_rafael.outputs.heal_status        || 'skipped' }}"
+
+          # Compute mission status
+          MISSION_OK=true
+          [[ "$MICHAEL_RESULT" == "failure" ]] && MISSION_OK=false
+          [[ "$GABRIEL_RESULT" == "failure" ]] && MISSION_OK=false
+          [[ "$RAFAEL_RESULT"  == "failure" ]] && MISSION_OK=false
+
+          echo "mission_ok=$MISSION_OK" >> "$GITHUB_OUTPUT"
+
+          statusIcon() {
+            case "$1" in
+              success) echo "✅" ;;
+              failure) echo "❌" ;;
+              skipped) echo "⏭️" ;;
+              *)       echo "⚠️" ;;
+            esac
+          }
+
+          MICHAEL_ICON=$(statusIcon "$MICHAEL_RESULT")
+          GABRIEL_ICON=$(statusIcon "$GABRIEL_RESULT")
+          RAFAEL_ICON=$(statusIcon "$RAFAEL_RESULT")
+
+          if $MISSION_OK; then
+            MISSION_ICON="✅"
+            MISSION_LABEL="ALL SYSTEMS NOMINAL"
+          else
+            MISSION_ICON="❌"
+            MISSION_LABEL="MISSION ALERT — REVIEW FAILURES"
+          fi
+
+          {
+            echo "# 🔱 Archangels — Mission Debrief"
+            echo ""
+            echo "**Mission ID:** \`${{ needs.command_console.outputs.mission_id }}\`"
+            echo ""
+            echo "## $MISSION_ICON $MISSION_LABEL"
+            echo ""
+            echo "| Archangel | Job Result | Agent Status |"
+            echo "|-----------|-----------|--------------|"
+            echo "| ⚔️ **Michael** (Warrior)  | $MICHAEL_ICON $MICHAEL_RESULT | \`$MICHAEL_SHIELD\` |"
+            echo "| 📯 **Gabriel** (Messenger) | $GABRIEL_ICON $GABRIEL_RESULT | \`$GABRIEL_HERALD\` |"
+            echo "| ✨ **Rafael** (Healer)     | $RAFAEL_ICON $RAFAEL_RESULT  | \`$RAFAEL_HEAL\` |"
+            echo ""
+            echo "---"
+            echo ""
+            echo "| Context | Value |"
+            echo "|---------|-------|"
+            echo "| Triggered by | @${{ github.actor }} |"
+            echo "| Event        | \`${{ github.event_name }}\` |"
+            echo "| Branch       | \`${{ github.ref_name }}\` |"
+            echo "| Commit       | \`${{ github.sha }}\` |"
+            echo "| Run          | [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |"
+            echo ""
+            echo "> *\"Three voices. One signal. The network endures.\"*"
+            echo "> — Constantine Universe, Hidden Network Operations"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "🚨 Fail mission on agent failure"
+        if: steps.results.outputs.mission_ok == 'false'
+        run: |
+          echo "::error::One or more Archangel agents reported a failure. Review the mission debrief above."
+          exit 1

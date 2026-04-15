@@ -1,0 +1,68 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Composite Action: rafael-diagnose
+# Runs a focused diagnostic on a specific file, directory, or issue list.
+# Used by Rafael's Audit job and by external callers.
+# ─────────────────────────────────────────────────────────────────────────────
+name: "✨ Rafael's Diagnose — Health Check"
+description: "Runs a targeted health diagnostic on a file or directory."
+
+inputs:
+  path:
+    description: "Path to diagnose (relative to repo root)"
+    required: false
+    default: "."
+  check_large_files:
+    description: "Warn on files exceeding size_threshold_kb"
+    required: false
+    default: "true"
+  size_threshold_kb:
+    description: "File size threshold in KB"
+    required: false
+    default: "500"
+
+outputs:
+  issues_found:
+    description: "Number of health issues detected"
+    value: ${{ steps.diagnose.outputs.issues_found }}
+  summary:
+    description: "Plain-text diagnostic summary"
+    value: ${{ steps.diagnose.outputs.summary }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: "✨ Run Rafael's diagnostic"
+      id: diagnose
+      shell: bash
+      run: |
+        TARGET="${{ inputs.path }}"
+        THRESHOLD="${{ inputs.size_threshold_kb }}"
+        ISSUES=0
+        SUMMARY=""
+
+        # Large file check
+        if [ "${{ inputs.check_large_files }}" == "true" ]; then
+          while IFS= read -r f; do
+            SIZE=$(du -sk "$f" | cut -f1)
+            if [ "$SIZE" -gt "$THRESHOLD" ]; then
+              SUMMARY="${SUMMARY}LARGE FILE: $f (${SIZE}KB)\n"
+              ISSUES=$((ISSUES + 1))
+              echo "::warning file=$f::Rafael Diagnose: file exceeds ${THRESHOLD}KB threshold (${SIZE}KB)"
+            fi
+          done < <(find "$TARGET" -not -path './.git/*' -type f 2>/dev/null)
+        fi
+
+        # HTML accessibility check
+        for f in $(find "$TARGET" -name '*.html' -not -path './.git/*' 2>/dev/null); do
+          if ! grep -qi '<title>' "$f"; then
+            SUMMARY="${SUMMARY}MISSING TITLE: $f\n"
+            ISSUES=$((ISSUES + 1))
+          fi
+        done
+
+        echo "issues_found=$ISSUES" >> "$GITHUB_OUTPUT"
+        printf "summary=%s" "$SUMMARY" >> "$GITHUB_OUTPUT"
+
+        if [ $ISSUES -gt 0 ]; then
+          echo "::notice::Rafael Diagnose found $ISSUES health issue(s) in $TARGET"
+        fi
