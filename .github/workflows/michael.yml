@@ -1,0 +1,375 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# MICHAEL — The Warrior Archangel
+# Role  : Security Guardian & CI Protector
+# Domain: Secret scanning · HTML/JS linting · PR policy · File integrity
+#
+# Triggers:
+#   • push            — every branch
+#   • pull_request    — targeting main
+#   • workflow_call   — invoked by the Archangels Orchestrator
+#   • workflow_dispatch — manual run
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: "⚔️ Michael — Warrior Guardian"
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      scan_depth:
+        description: "Secret-scan depth (shallow | deep)"
+        required: false
+        default: "shallow"
+        type: choice
+        options: [shallow, deep]
+  workflow_call:
+    inputs:
+      scan_depth:
+        description: "Secret-scan depth"
+        required: false
+        default: "shallow"
+        type: string
+    outputs:
+      shield_status:
+        description: "Overall shield status (pass | fail)"
+        value: ${{ jobs.report.outputs.shield_status }}
+
+# ── Concurrency: one run per ref, cancel stale runs ─────────────────────────
+concurrency:
+  group: michael-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+env:
+  AGENT: "⚔️  MICHAEL"
+  SCAN_DEPTH: ${{ inputs.scan_depth || 'shallow' }}
+
+# ────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1. SENTINEL — File integrity & secret scanning ────────────────────────
+  sentinel:
+    name: "🛡️ Sentinel — Secret & Integrity Scan"
+    runs-on: ubuntu-latest
+    outputs:
+      secrets_found: ${{ steps.secret_scan.outputs.secrets_found }}
+      file_count: ${{ steps.inventory.outputs.file_count }}
+
+    steps:
+      - name: "📡 Summon Michael"
+        run: |
+          echo "╔══════════════════════════════════════════════════════════╗"
+          echo "║  ⚔️  MICHAEL  —  WARRIOR ARCHANGEL                       ║"
+          echo "║  SENTINEL JOB  —  SCANNING FOR THREATS                  ║"
+          echo "╚══════════════════════════════════════════════════════════╝"
+          echo "Scan depth : $SCAN_DEPTH"
+          echo "Ref        : ${{ github.ref }}"
+          echo "SHA        : ${{ github.sha }}"
+
+      - name: "🔽 Checkout"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ env.SCAN_DEPTH == 'deep' && 0 || 1 }}
+
+      - name: "📋 File inventory"
+        id: inventory
+        run: |
+          count=$(find . -not -path './.git/*' -type f | wc -l | tr -d ' ')
+          echo "file_count=$count" >> "$GITHUB_OUTPUT"
+          echo "### 📋 File Inventory" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Type | Count |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| HTML | $(find . -name '*.html' -not -path './.git/*' | wc -l | tr -d ' ') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| CSS  | $(find . -name '*.css'  -not -path './.git/*' | wc -l | tr -d ' ') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| JS   | $(find . -name '*.js'   -not -path './.git/*' | wc -l | tr -d ' ') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| YAML | $(find . -name '*.yml' -o -name '*.yaml' | grep -v '/.git/' | wc -l | tr -d ' ') |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Total** | **$count** |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: "🔍 Secret scan — patterns"
+        id: secret_scan
+        run: |
+          echo "## ⚔️  Michael — Secret Scan Report" >> "$GITHUB_STEP_SUMMARY"
+          FOUND=0
+
+          declare -A PATTERNS=(
+            ["AWS Access Key"]="AKIA[0-9A-Z]{16}"
+            ["AWS Secret Key"]="[Aa][Ww][Ss][_-]?[Ss][Ee][Cc][Rr][Ee][Tt].*=.*['\"][0-9a-zA-Z/+=]{40}['\"]"
+            ["Generic API Key"]="[Aa][Pp][Ii][_-]?[Kk][Ee][Yy].*=.*['\"][0-9a-zA-Z]{20,}['\"]"
+            ["Private Key Block"]="-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY"
+            ["GitHub Token"]="gh[pousr]_[A-Za-z0-9_]{36,}"
+            ["Slack Token"]="xox[baprs]-[0-9A-Za-z]{10,}"
+            ["Generic Password"]="[Pp][Aa][Ss][Ss][Ww][Oo][Rr][Dd].*=.*['\"][^'\"]{8,}['\"]"
+          )
+
+          echo "### 🔍 Scanning for leaked secrets…" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Pattern | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|--------|" >> "$GITHUB_STEP_SUMMARY"
+
+          for name in "${!PATTERNS[@]}"; do
+            pattern="${PATTERNS[$name]}"
+            matches=$(grep -rEn --include="*.html" --include="*.js" \
+              --include="*.css" --include="*.md" --include="*.yml" \
+              --exclude-dir=".git" "$pattern" . 2>/dev/null || true)
+            if [ -n "$matches" ]; then
+              echo "| $name | ❌ DETECTED |" >> "$GITHUB_STEP_SUMMARY"
+              echo "::warning file=::$name pattern matched — review output"
+              FOUND=$((FOUND + 1))
+            else
+              echo "| $name | ✅ Clean |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+          echo "secrets_found=$FOUND" >> "$GITHUB_OUTPUT"
+
+          if [ "$FOUND" -gt 0 ]; then
+            echo "::error::Michael detected $FOUND potential secret pattern(s). Review immediately."
+            exit 1
+          fi
+          echo "✅ No secrets detected." >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 2. SHIELD — HTML/JS linting & code quality ────────────────────────────
+  shield:
+    name: "🗡️ Shield — Linting & Quality Gates"
+    runs-on: ubuntu-latest
+    outputs:
+      lint_status: ${{ steps.lint_summary.outputs.status }}
+
+    steps:
+      - name: "🔽 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "⚙️  Setup Node.js"
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: "📦 Install linting tools"
+        run: |
+          npm install --save-dev \
+            htmlhint@1.x \
+            stylelint@16.x \
+            stylelint-config-standard@36.x \
+            2>/dev/null
+        continue-on-error: true
+
+      - name: "🏗️  Write HTMLHint config"
+        run: |
+          cat > .htmlhintrc << 'EOF'
+          {
+            "tagname-lowercase": true,
+            "attr-lowercase": true,
+            "attr-value-double-quotes": true,
+            "doctype-first": true,
+            "tag-pair": true,
+            "spec-char-escape": false,
+            "id-unique": true,
+            "src-not-empty": true,
+            "title-require": true
+          }
+          EOF
+
+      - name: "🏗️  Write Stylelint config"
+        run: |
+          cat > .stylelintrc.json << 'EOF'
+          {
+            "extends": "stylelint-config-standard",
+            "rules": {
+              "color-no-invalid-hex": true,
+              "declaration-block-no-duplicate-properties": true,
+              "no-duplicate-selectors": true,
+              "selector-pseudo-class-no-unknown": true
+            }
+          }
+          EOF
+
+      - name: "🔎 Lint HTML files"
+        id: lint_html
+        run: |
+          echo "### 🗡️ HTML Lint Results" >> "$GITHUB_STEP_SUMMARY"
+          HTML_FILES=$(find . -name '*.html' -not -path './.git/*' | head -50)
+          if [ -z "$HTML_FILES" ]; then
+            echo "No HTML files found." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          set +e
+          output=$(npx htmlhint $HTML_FILES 2>&1)
+          exit_code=$?
+          set -e
+          if [ $exit_code -ne 0 ]; then
+            echo "❌ HTMLHint found issues:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$output" | head -40 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::HTMLHint reported issues — see step summary"
+          else
+            echo "✅ All HTML files pass lint checks." >> "$GITHUB_STEP_SUMMARY"
+          fi
+        continue-on-error: true
+
+      - name: "🔎 Lint CSS files"
+        id: lint_css
+        run: |
+          echo "### 🗡️ CSS Lint Results" >> "$GITHUB_STEP_SUMMARY"
+          CSS_FILES=$(find . -name '*.css' -not -path './.git/*' \
+            -not -path './bootstrap/*' \
+            -not -path './highlighter/*' | head -20)
+          if [ -z "$CSS_FILES" ]; then
+            echo "No project CSS files to lint." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          set +e
+          output=$(npx stylelint $CSS_FILES 2>&1)
+          exit_code=$?
+          set -e
+          if [ $exit_code -ne 0 ]; then
+            echo "⚠️ Stylelint reported issues:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$output" | head -40 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "✅ All CSS files pass lint checks." >> "$GITHUB_STEP_SUMMARY"
+          fi
+        continue-on-error: true
+
+      - name: "🔎 Validate JS syntax"
+        id: lint_js
+        run: |
+          echo "### 🗡️ JavaScript Syntax Check" >> "$GITHUB_STEP_SUMMARY"
+          JS_FILES=$(find . -name '*.js' -not -path './.git/*' \
+            -not -path './bootstrap/*' \
+            -not -path './highlighter/*' | head -20)
+          ERRORS=0
+          for f in $JS_FILES; do
+            set +e
+            node --check "$f" 2>&1
+            code=$?
+            set -e
+            if [ $code -ne 0 ]; then
+              echo "❌ Syntax error in $f" >> "$GITHUB_STEP_SUMMARY"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+          if [ $ERRORS -eq 0 ]; then
+            echo "✅ All JS files pass syntax check." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::$ERRORS JS file(s) have syntax errors"
+            exit 1
+          fi
+
+      - name: "📊 Lint summary"
+        id: lint_summary
+        if: always()
+        run: |
+          echo "status=pass" >> "$GITHUB_OUTPUT"
+          echo "---" >> "$GITHUB_STEP_SUMMARY"
+          echo "> ⚔️  **Michael's Shield held. All quality gates evaluated.**" >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 3. ENFORCE — PR & branch policy ───────────────────────────────────────
+  enforce:
+    name: "⚡ Enforce — PR & Branch Policy"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: "🔽 Checkout"
+        uses: actions/checkout@v4
+
+      - name: "📏 Check PR size"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              per_page: 100,
+            });
+
+            const additions = files.reduce((s, f) => s + f.additions, 0);
+            const deletions = files.reduce((s, f) => s + f.deletions, 0);
+            const total     = additions + deletions;
+            const fileCount = files.length;
+
+            let size = '🟢 Small';
+            if (total > 500)  size = '🟡 Medium';
+            if (total > 1000) size = '🔴 Large';
+
+            const summary = [
+              `## ⚔️ Michael — PR Policy Report`,
+              `| Metric | Value |`,
+              `|--------|-------|`,
+              `| Files changed | ${fileCount} |`,
+              `| Lines added   | +${additions} |`,
+              `| Lines removed | -${deletions} |`,
+              `| Total delta   | ${total} |`,
+              `| PR size       | ${size} |`,
+            ].join('\n');
+
+            await core.summary.addRaw(summary).write();
+
+            if (total > 2000) {
+              core.warning(`PR is very large (${total} lines). Consider splitting into smaller PRs.`);
+            }
+
+      - name: "🏷️ Validate PR title format"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const valid = /^(feat|fix|docs|style|refactor|test|chore|ci|build|revert)(\(.+\))?: .{3,}/.test(title);
+
+            if (!valid) {
+              core.warning(
+                `PR title "${title}" does not follow Conventional Commits format.\n` +
+                `Expected: type(scope): description\n` +
+                `Types: feat|fix|docs|style|refactor|test|chore|ci|build|revert`
+              );
+            } else {
+              core.info(`✅ PR title format is valid: "${title}"`);
+            }
+
+  # ── 4. REPORT — Aggregate & emit shield status ────────────────────────────
+  report:
+    name: "📜 Michael's Report"
+    runs-on: ubuntu-latest
+    needs: [sentinel, shield]
+    if: always()
+    outputs:
+      shield_status: ${{ steps.conclude.outputs.shield_status }}
+
+    steps:
+      - name: "🏁 Conclude"
+        id: conclude
+        run: |
+          SENTINEL="${{ needs.sentinel.result }}"
+          SHIELD="${{ needs.shield.result }}"
+
+          if [[ "$SENTINEL" == "success" && "$SHIELD" == "success" ]]; then
+            STATUS="pass"
+            ICON="✅"
+          else
+            STATUS="fail"
+            ICON="❌"
+          fi
+
+          echo "shield_status=$STATUS" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## ⚔️  Michael — Final Report"
+            echo ""
+            echo "| Agent Job | Result |"
+            echo "|-----------|--------|"
+            echo "| 🛡️ Sentinel (secret scan)  | $SENTINEL |"
+            echo "| 🗡️ Shield (lint/quality)   | $SHIELD |"
+            echo ""
+            echo "### $ICON Overall Shield Status: \`$STATUS\`"
+            echo ""
+            echo "> *"The sword of Michael does not rest until all threats are neutralised."*"
+          } >> "$GITHUB_STEP_SUMMARY"

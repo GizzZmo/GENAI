@@ -1,0 +1,407 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# GABRIEL — The Messenger Archangel
+# Role  : Communication, PR Intelligence & Community Steward
+# Domain: Auto-labeling · Contributor welcome · PR summaries · Issue triage
+#
+# Triggers:
+#   • pull_request — opened, synchronize, reopened, labeled
+#   • issues       — opened, labeled
+#   • workflow_call — invoked by the Archangels Orchestrator
+#   • workflow_dispatch — manual run
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: "📯 Gabriel — Messenger Herald"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      target_pr:
+        description: "PR number to re-run Gabriel on (leave blank for latest)"
+        required: false
+        default: ""
+  workflow_call:
+    outputs:
+      herald_status:
+        description: "Herald status (pass | fail)"
+        value: ${{ jobs.report.outputs.herald_status }}
+
+concurrency:
+  group: gabriel-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+env:
+  AGENT: "📯  GABRIEL"
+
+# ────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── 1. HERALD — Welcome first-time contributors ───────────────────────────
+  herald:
+    name: "🌟 Herald — First-Time Contributor Welcome"
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'pull_request' && github.event.action == 'opened') ||
+      (github.event_name == 'issues'       && github.event.action == 'opened')
+
+    steps:
+      - name: "📡 Summon Gabriel"
+        run: |
+          echo "╔══════════════════════════════════════════════════════════╗"
+          echo "║  📯  GABRIEL  —  MESSENGER ARCHANGEL                     ║"
+          echo "║  HERALD JOB  —  GREETING THE COMMUNITY                  ║"
+          echo "╚══════════════════════════════════════════════════════════╝"
+
+      - name: "🌟 Welcome new contributors (PR)"
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const author = context.payload.pull_request.user.login;
+            const prNumber = context.payload.pull_request.number;
+
+            // Check if this author has merged PRs before
+            const { data: prs } = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              state: 'closed',
+              per_page: 100,
+            });
+
+            const mergedByAuthor = prs.filter(
+              pr => pr.merged_at && pr.user.login === author
+            );
+
+            if (mergedByAuthor.length === 0) {
+              const body = [
+                `## 📯 Gabriel's Welcome`,
+                ``,
+                `Welcome to the **Constantine Universe**, @${author}! 🌟`,
+                ``,
+                `Thank you for opening your first contribution to this repository.`,
+                `A guardian will review your changes soon.`,
+                ``,
+                `> *"Every signal that reaches the network began with a single sender."*`,
+                `> — Gabriel, Messenger of the Hidden Network`,
+                ``,
+                `---`,
+                `<sub>📯 Posted by the Gabriel Agent Orchestrator</sub>`,
+              ].join('\n');
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+
+              core.info(`Welcome message posted for first-time contributor: @${author}`);
+            } else {
+              core.info(`@${author} has ${mergedByAuthor.length} previous merged PRs — no welcome needed.`);
+            }
+
+      - name: "🌟 Welcome new issue reporters"
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const author   = context.payload.issue.user.login;
+            const issueNum = context.payload.issue.number;
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner:    context.repo.owner,
+              repo:     context.repo.repo,
+              creator:  author,
+              state:    'all',
+              per_page: 10,
+            });
+
+            if (issues.length <= 1) {
+              const body = [
+                `## 📯 Gabriel's Response`,
+                ``,
+                `Thank you for opening an issue, @${author}! 🌟`,
+                ``,
+                `The Constantine Universe team will investigate and respond.`,
+                `Please add any additional context that might help diagnose the situation.`,
+                ``,
+                `> *"Every message matters. Every signal is heard."*`,
+                `> — Gabriel`,
+                ``,
+                `---`,
+                `<sub>📯 Posted by the Gabriel Agent Orchestrator</sub>`,
+              ].join('\n');
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo:  context.repo.repo,
+                issue_number: issueNum,
+                body,
+              });
+            }
+
+  # ── 2. SCRIBE — Auto-label PRs and issues by file path ────────────────────
+  scribe:
+    name: "✍️ Scribe — Auto-Label"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: "🔽 Checkout"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "🏷️ Detect changed areas & apply labels"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner:       context.repo.owner,
+              repo:        context.repo.repo,
+              pull_number: prNumber,
+              per_page:    100,
+            });
+
+            const filenames = files.map(f => f.filename);
+
+            // Label-to-path-pattern map
+            const labelRules = [
+              { label: 'area: workflows',  patterns: [/^\.github\//] },
+              { label: 'area: frontend',   patterns: [/\.html$/i, /\.css$/i] },
+              { label: 'area: javascript', patterns: [/\.js$/i] },
+              { label: 'area: docs',       patterns: [/\.md$/i, /README/i, /PRODUCTION_BIBLE/i] },
+              { label: 'area: static',     patterns: [/^static\//] },
+              { label: 'area: bootstrap',  patterns: [/^bootstrap\//] },
+              { label: 'area: vault7',     patterns: [/^vault7\//] },
+              { label: 'size: large',      patterns: [] },   // set below by delta
+            ];
+
+            const additions = files.reduce((s, f) => s + f.additions, 0);
+            const deletions = files.reduce((s, f) => s + f.deletions, 0);
+
+            const labelsToApply = new Set();
+
+            for (const rule of labelRules) {
+              if (rule.label === 'size: large') continue;
+              for (const pat of rule.patterns) {
+                if (filenames.some(fn => pat.test(fn))) {
+                  labelsToApply.add(rule.label);
+                  break;
+                }
+              }
+            }
+
+            if (additions + deletions > 500) labelsToApply.add('size: large');
+            else if (additions + deletions > 100) labelsToApply.add('size: medium');
+            else labelsToApply.add('size: small');
+
+            // Ensure labels exist, create missing ones
+            const labelColors = {
+              'area: workflows':  '0075ca',
+              'area: frontend':   'e4e669',
+              'area: javascript': 'f1e05a',
+              'area: docs':       '0052cc',
+              'area: static':     'bfd4f2',
+              'area: bootstrap':  '7057ff',
+              'area: vault7':     'd93f0b',
+              'size: small':      '0e8a16',
+              'size: medium':     'fbca04',
+              'size: large':      'e11d48',
+            };
+
+            for (const label of labelsToApply) {
+              try {
+                await github.rest.issues.getLabel({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  name:  label,
+                });
+              } catch {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo:  context.repo.repo,
+                  name:  label,
+                  color: labelColors[label] || 'cccccc',
+                });
+              }
+            }
+
+            if (labelsToApply.size > 0) {
+              await github.rest.issues.addLabels({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: prNumber,
+                labels:       [...labelsToApply],
+              });
+              core.info(`Labels applied: ${[...labelsToApply].join(', ')}`);
+            }
+
+  # ── 3. CHRONICLE — Post rich PR summary ───────────────────────────────────
+  chronicle:
+    name: "📜 Chronicle — PR Intelligence Report"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: "🔽 Checkout"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "📊 Generate PR summary"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const pr       = context.payload.pull_request;
+
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner:       context.repo.owner,
+              repo:        context.repo.repo,
+              pull_number: prNumber,
+              per_page:    100,
+            });
+
+            const additions = files.reduce((s, f) => s + f.additions, 0);
+            const deletions = files.reduce((s, f) => s + f.deletions, 0);
+
+            // Group files by extension
+            const byExt = {};
+            for (const f of files) {
+              const ext = f.filename.split('.').pop().toLowerCase() || 'other';
+              if (!byExt[ext]) byExt[ext] = { files: 0, add: 0, del: 0 };
+              byExt[ext].files++;
+              byExt[ext].add += f.additions;
+              byExt[ext].del += f.deletions;
+            }
+
+            const extTable = Object.entries(byExt)
+              .sort((a, b) => (b[1].add + b[1].del) - (a[1].add + a[1].del))
+              .map(([ext, s]) =>
+                `| \`.${ext}\` | ${s.files} | +${s.add} / -${s.del} |`
+              ).join('\n');
+
+            // Changed file list (top 20)
+            const fileList = files.slice(0, 20)
+              .map(f => {
+                const bar = '▓'.repeat(Math.min(20, Math.round((f.additions + f.deletions) / 10)));
+                return `| \`${f.filename}\` | +${f.additions} | -${f.deletions} | ${bar || '·'} |`;
+              }).join('\n');
+
+            const body = [
+              `## 📯 Gabriel's Chronicle — PR #${prNumber}`,
+              ``,
+              `| Stat | Value |`,
+              `|------|-------|`,
+              `| **Author** | @${pr.user.login} |`,
+              `| **Base → Head** | \`${pr.base.ref}\` → \`${pr.head.ref}\` |`,
+              `| **Files changed** | ${files.length} |`,
+              `| **Additions** | +${additions} |`,
+              `| **Deletions** | -${deletions} |`,
+              `| **Net delta** | ${additions - deletions >= 0 ? '+' : ''}${additions - deletions} |`,
+              ``,
+              `### 📁 Changes by file type`,
+              `| Extension | Files | Lines (+/-) |`,
+              `|-----------|-------|-------------|`,
+              extTable,
+              ``,
+              `### 📄 Changed files`,
+              `| File | +Add | -Del | Impact |`,
+              `|------|------|------|--------|`,
+              fileList,
+              files.length > 20 ? `\n*…and ${files.length - 20} more files*` : '',
+              ``,
+              `---`,
+              `> *"The message is carried faithfully, without alteration."*`,
+              `> — Gabriel`,
+              ``,
+              `<sub>📯 Posted by the Gabriel Agent Orchestrator · ${new Date().toISOString()}</sub>`,
+            ].join('\n');
+
+            // Upsert comment (update existing Gabriel comment if present)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: prNumber,
+              per_page:     100,
+            });
+
+            const existing = comments.find(
+              c => c.user.type === 'Bot' && c.body.includes("Gabriel's Chronicle")
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              core.info('Updated existing Gabriel Chronicle comment.');
+            } else {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+              core.info('Created new Gabriel Chronicle comment.');
+            }
+
+      - name: "📯 Step summary"
+        run: |
+          {
+            echo "## 📯 Gabriel — Chronicle Complete"
+            echo ""
+            echo "PR summary posted/updated on PR #${{ github.event.pull_request.number }}"
+            echo ""
+            echo "> *\"The message has been delivered.\"*"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 4. REPORT — Aggregate ─────────────────────────────────────────────────
+  report:
+    name: "📜 Gabriel's Report"
+    runs-on: ubuntu-latest
+    needs: [scribe, chronicle]
+    if: always()
+    outputs:
+      herald_status: ${{ steps.conclude.outputs.herald_status }}
+
+    steps:
+      - name: "🏁 Conclude"
+        id: conclude
+        run: |
+          SCRIBE="${{ needs.scribe.result }}"
+          CHRONICLE="${{ needs.chronicle.result }}"
+
+          if [[ "$SCRIBE" == "success" && "$CHRONICLE" == "success" ]]; then
+            STATUS="pass"
+          else
+            STATUS="fail"
+          fi
+
+          echo "herald_status=$STATUS" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## 📯  Gabriel — Final Report"
+            echo ""
+            echo "| Agent Job | Result |"
+            echo "|-----------|--------|"
+            echo "| ✍️ Scribe (auto-label)      | $SCRIBE |"
+            echo "| 📜 Chronicle (PR summary)  | $CHRONICLE |"
+            echo ""
+            echo "### Overall Herald Status: \`$STATUS\`"
+            echo ""
+            echo "> *\"The heavens heard it. The network received it.\"*"
+          } >> "$GITHUB_STEP_SUMMARY"
