@@ -133,7 +133,7 @@ jobs:
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo "#### $name locations (file:line)" >> "$GITHUB_STEP_SUMMARY"
               echo '```' >> "$GITHUB_STEP_SUMMARY"
-              echo "$matches" | sed -E 's/:[^:]+$//' | sort -u | head -50 >> "$GITHUB_STEP_SUMMARY"
+              echo "$matches" | cut -d: -f1,2 | sort -u | head -50 >> "$GITHUB_STEP_SUMMARY"
               echo '```' >> "$GITHUB_STEP_SUMMARY"
             else
               echo "| $name | ✅ Clean |" >> "$GITHUB_STEP_SUMMARY"
