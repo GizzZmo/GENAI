@@ -9,6 +9,6 @@ See [PRODUCTION_BIBLE.md](PRODUCTION_BIBLE.md) for the full expanded production 
 ## CIAHackingTools
 WikiLeaks Vault 7 CIA Hacking Tools
 
-ART & SCIENCE, MIT/Harvard/Berkley
+ART & SCIENCE, MIT/Harvard/Berkeley
 
 Use at own risk.
