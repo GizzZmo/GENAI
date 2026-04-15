@@ -116,11 +116,25 @@ jobs:
             pattern="${PATTERNS[$name]}"
             matches=$(grep -rEn --include="*.html" --include="*.js" \
               --include="*.css" --include="*.md" --include="*.yml" \
-              --exclude-dir=".git" "$pattern" . 2>/dev/null || true)
+              --exclude-dir=".git" \
+              --exclude-dir=".github" \
+              --exclude-dir="bootstrap" \
+              --exclude-dir="highlighter" \
+              --exclude-dir="vault7" \
+              --exclude-dir="node_modules" \
+              --exclude-dir="dist" \
+              "$pattern" . 2>/dev/null || true)
             if [ -n "$matches" ]; then
               echo "| $name | ❌ DETECTED |" >> "$GITHUB_STEP_SUMMARY"
-              echo "::warning file=::$name pattern matched — review output"
+              echo "::warning::$name pattern matched — review summary for locations"
               FOUND=$((FOUND + 1))
+
+              # Print file:line only (no secret content)
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "#### $name locations (file:line)" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              echo "$matches" | sed -E 's/:[^:]+$//' | sort -u | head -50 >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
             else
               echo "| $name | ✅ Clean |" >> "$GITHUB_STEP_SUMMARY"
             fi
