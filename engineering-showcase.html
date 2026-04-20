@@ -828,13 +828,19 @@ tickUptime();
   const canvas = $('wave-canvas');
   const ctx    = canvas.getContext('2d');
 
+  // Display-unit conversion constants for VU meter labels
+  const GAIN_SCALE  = -.28;  // maps 0–100% bar to ≈ −28…0 dB range
+  const GAIN_OFFSET = 0.2;   // small bias so 100% reads ~0.0 dB
+  const DELAY_MS_PER_PCT = 7.24; // 100% bar → 724 ms max delay
+  const MIX_SCALE   = .12;   // maps (pct−100) to dBFS (0% → −12 dBFS)
+
   // Meter state — slowly drift
   const meters = [
-    { el: $('m-gain'),  val: $('v-gain'),  pct: 72, label: v => `${(v * -.28 - 0.2).toFixed(1)} dB`, fill: 'fill-cyan' },
-    { el: $('m-drive'), val: $('v-drive'), pct: 45, label: v => `  ${v}%`,                            fill: 'fill-amber' },
-    { el: $('m-reverb'),val: $('v-reverb'),pct: 33, label: v => `  ${v}%`,                            fill: 'fill-violet' },
-    { el: $('m-delay'), val: $('v-delay'), pct: 58, label: v => `${Math.round(v * 7.24)} ms`,         fill: 'fill-green' },
-    { el: $('m-mix'),   val: $('v-mix'),   pct: 88, label: v => ` ${Math.round((v - 100) * .12)} dBFS`, fill: 'fill-red' },
+    { el: $('m-gain'),  val: $('v-gain'),  pct: 72, label: v => `${(v * GAIN_SCALE - GAIN_OFFSET).toFixed(1)} dB`, fill: 'fill-cyan' },
+    { el: $('m-drive'), val: $('v-drive'), pct: 45, label: v => `  ${v}%`,                                          fill: 'fill-amber' },
+    { el: $('m-reverb'),val: $('v-reverb'),pct: 33, label: v => `  ${v}%`,                                          fill: 'fill-violet' },
+    { el: $('m-delay'), val: $('v-delay'), pct: 58, label: v => `${Math.round(v * DELAY_MS_PER_PCT)} ms`,           fill: 'fill-green' },
+    { el: $('m-mix'),   val: $('v-mix'),   pct: 88, label: v => ` ${Math.round((v - 100) * MIX_SCALE)} dBFS`,      fill: 'fill-red' },
   ];
 
   // Phase accumulators for a rich guitar-like composite wave
@@ -1068,8 +1074,8 @@ tickUptime();
     // Draw connections with animated packets
     connections.forEach(conn => {
       conn.t = (conn.t + .004) % 1;
-      const [sg, si2] = conn.from, [dg, di] = conn.to;
-      const src = nodePos(sg, si2, W, H);
+      const [sg, srcIdx] = conn.from, [dg, di] = conn.to;
+      const src = nodePos(sg, srcIdx, W, H);
       const dst = nodePos(dg, di, W, H);
 
       // Cable
