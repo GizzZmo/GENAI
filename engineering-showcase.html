@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engineering as Art — Constantine Universe Lab</title>
+  <style>
+    /* ── Reset & root ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #060a0f;
+      --bg2:        #0b1117;
+      --surface:    #111820;
+      --surface2:   #161e28;
+      --border:     #1e2d3d;
+      --border2:    #253344;
+      --cyan:       #00e5ff;
+      --cyan-dim:   rgba(0,229,255,.18);
+      --cyan-glow:  0 0 10px rgba(0,229,255,.55), 0 0 30px rgba(0,229,255,.2);
+      --green:      #39ff14;
+      --green-dim:  rgba(57,255,20,.15);
+      --amber:      #ffb703;
+      --amber-dim:  rgba(255,183,3,.15);
+      --red:        #ff3b5c;
+      --red-dim:    rgba(255,59,92,.15);
+      --violet:     #bf5fff;
+      --violet-dim: rgba(191,95,255,.18);
+      --text:       #c8d8e8;
+      --text-mid:   #7a94aa;
+      --text-dim:   #3d5060;
+      --mono:       'Courier New', Courier, monospace;
+      --sans:       'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      overflow-x: hidden;
+    }
+
+    /* ── Scanline overlay ─────────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9999;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,.08) 3px,
+        rgba(0,0,0,.08) 4px
+      );
+    }
+
+    /* ── Top bar ──────────────────────────────────────────────────── */
+    .top-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      height: 44px;
+      gap: 20px;
+    }
+    .top-bar-left { display: flex; align-items: center; gap: 18px; }
+    .top-bar-sig {
+      font-size: .65rem;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .top-bar-sig span { color: var(--cyan); }
+    .top-bar-title {
+      font-size: .8rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--cyan);
+    }
+    .top-bar-right { display: flex; align-items: center; gap: 16px; }
+    .led {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .led-green  { background: var(--green);  box-shadow: 0 0 6px var(--green); }
+    .led-amber  { background: var(--amber);  box-shadow: 0 0 6px var(--amber); animation: pulse-amber 2.4s ease-in-out infinite; }
+    .led-red    { background: var(--red);    box-shadow: 0 0 6px var(--red); }
+    .led-cyan   { background: var(--cyan);   box-shadow: 0 0 6px var(--cyan); animation: pulse-cyan 1.8s ease-in-out infinite; }
+    @keyframes pulse-amber { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes pulse-cyan  { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    .sys-tag {
+      font-size: .6rem;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .clock {
+      font-size: .75rem;
+      letter-spacing: 2px;
+      color: var(--cyan);
+      font-variant-numeric: tabular-nums;
+      min-width: 90px;
+      text-align: right;
+    }
+
+    /* ── Lab grid ─────────────────────────────────────────────────── */
+    .lab {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 1px;
+      background: var(--border);
+      min-height: calc(100vh - 44px);
+    }
+
+    /* ── Panel base ───────────────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* wide panels */
+    .panel-wide   { grid-column: span 2; }
+    .panel-tall   { grid-row: span 2; }
+    .panel-full   { grid-column: span 3; }
+
+    .panel-header {
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    .panel-id {
+      font-size: .55rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .panel-name {
+      font-size: .72rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .panel-name-cyan   { color: var(--cyan); }
+    .panel-name-green  { color: var(--green); }
+    .panel-name-amber  { color: var(--amber); }
+    .panel-name-violet { color: var(--violet); }
+    .panel-name-red    { color: var(--red); }
+
+    .panel-status {
+      margin-left: auto;
+      font-size: .6rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .status-live    { color: var(--green); }
+    .status-active  { color: var(--cyan); }
+    .status-warning { color: var(--amber); }
+    .status-nominal { color: var(--text-mid); }
+
+    .panel-body { flex: 1; overflow: hidden; position: relative; }
+
+    /* ── CRT corner glow ──────────────────────────────────────────── */
+    .panel::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      box-shadow: inset 0 0 60px rgba(0,0,0,.5);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PANEL 1 — THE EYE  (Face-Recon / surveillance)
+    ══════════════════════════════════════════════════════════════ */
+    .eye-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #eye-info {
+      position: absolute;
+      bottom: 10px;
+      left: 14px;
+      font-size: .6rem;
+      letter-spacing: 2px;
+      color: var(--green);
+      text-shadow: 0 0 6px var(--green);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PANEL 2 — THE VOICE  (DSP4Guitar waveform)
+    ══════════════════════════════════════════════════════════════ */
+    .dsp-body {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 12px 14px;
+      gap: 10px;
+    }
+    .dsp-row { display: flex; align-items: center; gap: 8px; }
+    .dsp-label {
+      font-size: .55rem;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      width: 52px;
+      flex-shrink: 0;
+    }
+    .dsp-meter {
+      flex: 1;
+      height: 6px;
+      background: var(--bg2);
+      border: 1px solid var(--border2);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+    }
+    .dsp-meter-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width .1s;
+    }
+    .fill-cyan   { background: linear-gradient(to right, var(--cyan), #00b4d8); box-shadow: 0 0 6px var(--cyan); }
+    .fill-green  { background: linear-gradient(to right, var(--green), #0fff50); box-shadow: 0 0 6px var(--green); }
+    .fill-amber  { background: linear-gradient(to right, var(--amber), #ffd60a); box-shadow: 0 0 6px var(--amber); }
+    .fill-violet { background: linear-gradient(to right, var(--violet), #c77dff); box-shadow: 0 0 6px var(--violet); }
+    .fill-red    { background: linear-gradient(to right, var(--red), #ff6b6b);  box-shadow: 0 0 6px var(--red); }
+
+    .dsp-val {
+      font-size: .6rem;
+      letter-spacing: 1px;
+      color: var(--text-mid);
+      width: 42px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .wave-canvas { flex: 1; width: 100%; display: block; }
+
+    .dsp-code-strip {
+      border-top: 1px solid var(--border);
+      padding: 6px 0 0;
+      font-size: .58rem;
+      line-height: 1.7;
+      color: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .dsp-code-strip .kw  { color: var(--violet); }
+    .dsp-code-strip .fn  { color: var(--cyan); }
+    .dsp-code-strip .num { color: var(--amber); }
+    .dsp-code-strip .str { color: var(--green); }
+    .dsp-code-strip .cm  { color: var(--text-dim); }
+
+    /* ══════════════════════════════════════════════════════════════
+       PANEL 3 — THE TONGUE  (AI_shell terminal)
+    ══════════════════════════════════════════════════════════════ */
+    .terminal-body {
+      font-size: .7rem;
+      line-height: 1.6;
+      padding: 10px 14px;
+      height: 100%;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+    .terminal-body::-webkit-scrollbar { display: none; }
+    .t-line { display: block; white-space: pre-wrap; word-break: break-all; }
+    .t-prompt { color: var(--green); }
+    .t-cmd    { color: var(--text); }
+    .t-out    { color: var(--text-mid); }
+    .t-ok     { color: var(--green); }
+    .t-warn   { color: var(--amber); }
+    .t-err    { color: var(--red); }
+    .t-info   { color: var(--cyan); }
+    .t-cursor::after {
+      content: '█';
+      animation: blink 1s step-end infinite;
+      color: var(--cyan);
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ══════════════════════════════════════════════════════════════
+       PANEL 4 — THE PULSE  (DJ Python Mixer / patchbay)
+    ══════════════════════════════════════════════════════════════ */
+    #pulse-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       PANEL 5 — THE MIND  (Master Prompt Editor / code view)
+    ══════════════════════════════════════════════════════════════ */
+    .code-editor {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      font-size: .65rem;
+      line-height: 1.65;
+      overflow: hidden;
+    }
+    .code-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .code-tab {
+      padding: 5px 14px;
+      font-size: .58rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      border-right: 1px solid var(--border);
+      cursor: default;
+    }
+    .code-tab.active {
+      background: var(--surface2);
+      color: var(--cyan);
+      border-bottom: 1px solid var(--cyan);
+    }
+    .code-scroll {
+      flex: 1;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border2) transparent;
+    }
+    .code-scroll::-webkit-scrollbar { width: 4px; }
+    .code-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    .code-lines { display: table; width: 100%; padding: 8px 0; }
+    .code-line  { display: table-row; }
+    .code-line:hover .ln { background: var(--surface2); }
+    .code-line:hover .lc { background: rgba(0,229,255,.04); }
+    .ln {
+      display: table-cell;
+      text-align: right;
+      padding: 0 10px 0 14px;
+      color: var(--text-dim);
+      user-select: none;
+      font-size: .58rem;
+      width: 36px;
+      vertical-align: top;
+    }
+    .lc {
+      display: table-cell;
+      padding: 0 14px 0 8px;
+      width: 100%;
+    }
+
+    /* syntax colours */
+    .kw  { color: #c792ea; }   /* keyword */
+    .fn  { color: #82aaff; }   /* function/method */
+    .tp  { color: #ffcb6b; }   /* type/class */
+    .st  { color: #c3e88d; }   /* string */
+    .nm  { color: #f78c6c; }   /* number */
+    .cm  { color: #546e7a; font-style: italic; } /* comment */
+    .op  { color: #89ddff; }   /* operator */
+    .dc  { color: var(--cyan); } /* decorator */
+    .pn  { color: var(--text); } /* punctuation/plain */
+
+    /* highlight current "executing" line */
+    .line-active .lc { background: rgba(0,229,255,.07); }
+    .line-active .ln { color: var(--cyan); }
+
+    /* ══════════════════════════════════════════════════════════════
+       PANEL 6 — METRICS bar (bottom full-width)
+    ══════════════════════════════════════════════════════════════ */
+    .metrics-bar {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .metric-cell {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 8px 16px;
+      border-right: 1px solid var(--border);
+      gap: 3px;
+    }
+    .metric-cell:last-child { border-right: none; }
+    .metric-label {
+      font-size: .52rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .metric-value {
+      font-size: 1.15rem;
+      letter-spacing: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-sub {
+      font-size: .55rem;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+    }
+    .mv-cyan   { color: var(--cyan);   text-shadow: var(--cyan-glow); }
+    .mv-green  { color: var(--green);  text-shadow: 0 0 8px var(--green); }
+    .mv-amber  { color: var(--amber);  text-shadow: 0 0 8px var(--amber); }
+    .mv-violet { color: var(--violet); text-shadow: 0 0 8px var(--violet); }
+    .mv-red    { color: var(--red);    text-shadow: 0 0 8px var(--red); }
+
+    /* ── Sparkline mini-canvas ────────────────────────────────────── */
+    .sparkline {
+      display: block;
+      width: 80px;
+      height: 22px;
+    }
+
+    /* ── Hero caption strip ───────────────────────────────────────── */
+    .caption-strip {
+      grid-column: span 3;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      display: flex;
+      align-items: baseline;
+      gap: 18px;
+    }
+    .caption-title {
+      font-size: 1.5rem;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: var(--cyan);
+      text-shadow: var(--cyan-glow);
+      font-family: var(--sans);
+    }
+    .caption-sub {
+      font-size: .65rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    /* ── Responsive: collapse to single column on small screens ─── */
+    @media (max-width: 900px) {
+      .lab {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+      }
+      .panel-wide, .panel-tall, .panel-full { grid-column: span 1; grid-row: span 1; }
+      .caption-strip { grid-column: span 1; }
+      .panel { min-height: 320px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Top bar ──────────────────────────────────────────────────────────── -->
+<header class="top-bar" role="banner">
+  <div class="top-bar-left">
+    <span class="top-bar-sig"><span>//</span> CONSTANTINE UNIVERSE</span>
+    <span class="top-bar-title">Lab Systems Monitor</span>
+  </div>
+  <div class="top-bar-right">
+    <span class="sys-tag"><span class="led led-green"></span>NODE-01 LIVE</span>
+    <span class="sys-tag"><span class="led led-amber"></span>AI CORE ACTIVE</span>
+    <span class="sys-tag"><span class="led led-cyan"></span>DSP RUNNING</span>
+    <span class="clock" id="clock" aria-label="System time">00:00:00</span>
+  </div>
+</header>
+
+<!-- ── Lab grid ─────────────────────────────────────────────────────────── -->
+<main class="lab" role="main">
+
+  <!-- Caption -->
+  <div class="caption-strip">
+    <span class="caption-title">Engineering as Art</span>
+    <span class="caption-sub">// The Hidden Network — Five Systems, One Studio</span>
+  </div>
+
+  <!-- ── PANEL 1: THE EYE ─────────────────────────────────────────────── -->
+  <section class="panel" aria-label="The Eye — surveillance system">
+    <div class="panel-header">
+      <span class="panel-id">SYS-01</span>
+      <span class="panel-name panel-name-green">The Eye</span>
+      <span class="panel-id">// Face-Recon</span>
+      <span class="panel-status status-live">● Live</span>
+    </div>
+    <div class="panel-body" style="position:relative;">
+      <canvas class="eye-canvas" id="eye-canvas" aria-label="Surveillance feed simulation"></canvas>
+      <div id="eye-info" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ── PANEL 2: THE VOICE ───────────────────────────────────────────── -->
+  <section class="panel" aria-label="The Voice — DSP4Guitar">
+    <div class="panel-header">
+      <span class="panel-id">SYS-02</span>
+      <span class="panel-name panel-name-cyan">The Voice</span>
+      <span class="panel-id">// DSP4Guitar</span>
+      <span class="panel-status status-active">● Active</span>
+    </div>
+    <div class="panel-body">
+      <div class="dsp-body">
+        <!-- VU meters -->
+        <div class="dsp-row">
+          <span class="dsp-label">Gain</span>
+          <div class="dsp-meter"><div class="dsp-meter-fill fill-cyan" id="m-gain" style="width:72%"></div></div>
+          <span class="dsp-val" id="v-gain">–4.2 dB</span>
+        </div>
+        <div class="dsp-row">
+          <span class="dsp-label">Drive</span>
+          <div class="dsp-meter"><div class="dsp-meter-fill fill-amber" id="m-drive" style="width:45%"></div></div>
+          <span class="dsp-val" id="v-drive">  45%</span>
+        </div>
+        <div class="dsp-row">
+          <span class="dsp-label">Reverb</span>
+          <div class="dsp-meter"><div class="dsp-meter-fill fill-violet" id="m-reverb" style="width:33%"></div></div>
+          <span class="dsp-val" id="v-reverb">  33%</span>
+        </div>
+        <div class="dsp-row">
+          <span class="dsp-label">Delay</span>
+          <div class="dsp-meter"><div class="dsp-meter-fill fill-green" id="m-delay" style="width:58%"></div></div>
+          <span class="dsp-val" id="v-delay">420 ms</span>
+        </div>
+        <div class="dsp-row">
+          <span class="dsp-label">Mix</span>
+          <div class="dsp-meter"><div class="dsp-meter-fill fill-red" id="m-mix" style="width:88%"></div></div>
+          <span class="dsp-val" id="v-mix"> 0 dBFS</span>
+        </div>
+
+        <!-- Oscilloscope canvas -->
+        <canvas class="wave-canvas" id="wave-canvas" aria-label="DSP waveform oscilloscope"></canvas>
+
+        <!-- Real JUCE-style code snippet -->
+        <div class="dsp-code-strip" aria-label="DSP source snippet">
+          <span class="kw">void</span> <span class="fn">processBlock</span>(<span class="tp">AudioBuffer</span>&lt;<span class="kw">float</span>&gt;&amp; buf, <span class="tp">MidiBuffer</span>&amp;) {<br>
+          &nbsp;&nbsp;<span class="kw">auto</span> block = <span class="tp">dsp::AudioBlock</span>&lt;<span class="kw">float</span>&gt;(buf);<br>
+          &nbsp;&nbsp;gain.process(<span class="tp">dsp::ProcessContextReplacing</span>&lt;<span class="kw">float</span>&gt;(block));<br>
+          &nbsp;&nbsp;convolution.process(<span class="tp">dsp::ProcessContextReplacing</span>&lt;<span class="kw">float</span>&gt;(block));<br>
+          } <span class="cm">// © DSP4Guitar — Constantine Universe</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PANEL 3: THE TONGUE ──────────────────────────────────────────── -->
+  <section class="panel panel-tall" aria-label="The Tongue — AI shell terminal">
+    <div class="panel-header">
+      <span class="panel-id">SYS-03</span>
+      <span class="panel-name panel-name-amber">The Tongue</span>
+      <span class="panel-id">// AI_shell</span>
+      <span class="panel-status status-active">● Active</span>
+    </div>
+    <div class="panel-body">
+      <div class="terminal-body" id="terminal" role="log" aria-label="AI shell output" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- ── PANEL 4: THE PULSE ───────────────────────────────────────────── -->
+  <section class="panel" aria-label="The Pulse — DJ Python Mixer routing">
+    <div class="panel-header">
+      <span class="panel-id">SYS-04</span>
+      <span class="panel-name panel-name-violet">The Pulse</span>
+      <span class="panel-id">// DJ Python Mixer</span>
+      <span class="panel-status status-active">● Active</span>
+    </div>
+    <div class="panel-body">
+      <canvas id="pulse-canvas" aria-label="Audio routing patchbay visualization"></canvas>
+    </div>
+  </section>
+
+  <!-- ── PANEL 5: THE MIND ────────────────────────────────────────────── -->
+  <section class="panel" aria-label="The Mind — Master Prompt Editor">
+    <div class="panel-header">
+      <span class="panel-id">SYS-05</span>
+      <span class="panel-name panel-name-violet">The Mind</span>
+      <span class="panel-id">// Master Prompt Editor</span>
+      <span class="panel-status status-nominal">◎ Nominal</span>
+    </div>
+    <div class="panel-body">
+      <div class="code-editor">
+        <div class="code-tabs">
+          <div class="code-tab active">ai_shell.py</div>
+          <div class="code-tab">router.py</div>
+          <div class="code-tab">dsp_core.cpp</div>
+        </div>
+        <div class="code-scroll">
+          <div class="code-lines" id="code-lines" aria-label="Source code viewer"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── METRICS bar ──────────────────────────────────────────────────── -->
+  <footer class="panel panel-full" style="flex-direction:row;" aria-label="System metrics">
+    <div class="metrics-bar" style="width:100%;display:flex;">
+      <div class="metric-cell">
+        <span class="metric-label">CPU Load</span>
+        <span class="metric-value mv-cyan" id="cpu-val">—</span>
+        <canvas class="sparkline" id="sp-cpu" aria-label="CPU sparkline"></canvas>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-label">Memory</span>
+        <span class="metric-value mv-green" id="mem-val">—</span>
+        <canvas class="sparkline" id="sp-mem" aria-label="Memory sparkline"></canvas>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-label">DSP Latency</span>
+        <span class="metric-value mv-amber" id="lat-val">—</span>
+        <span class="metric-sub">target ≤ 3.0 ms</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-label">AI Tokens/s</span>
+        <span class="metric-value mv-violet" id="tok-val">—</span>
+        <canvas class="sparkline" id="sp-tok" aria-label="Token rate sparkline"></canvas>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-label">Network I/O</span>
+        <span class="metric-value mv-red" id="net-val">—</span>
+        <span class="metric-sub" id="net-sub">↑ — &nbsp; ↓ —</span>
+      </div>
+      <div class="metric-cell">
+        <span class="metric-label">Uptime</span>
+        <span class="metric-value mv-cyan" id="uptime-val">—</span>
+        <span class="metric-sub">Node-01 · Lab</span>
+      </div>
+    </div>
+  </footer>
+
+</main>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────
+   Constantine Universe — Lab Systems Monitor
+   Engineering as Art — hyper-realistic dashboard
+   All animations driven by requestAnimationFrame + setInterval only.
+   Zero external dependencies.
+───────────────────────────────────────────────────────────────────────── */
+
+// ── Utility ───────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// ── Clock ─────────────────────────────────────────────────────────────────
+function tickClock() {
+  const n = new Date();
+  $('clock').textContent = n.toTimeString().slice(0, 8);
+}
+setInterval(tickClock, 1000);
+tickClock();
+
+// ── Uptime ────────────────────────────────────────────────────────────────
+const bootTime = Date.now() - Math.floor(rand(3600, 86400)) * 1000;
+function tickUptime() {
+  const s = Math.floor((Date.now() - bootTime) / 1000);
+  const h = String(Math.floor(s / 3600)).padStart(2, '0');
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  $('uptime-val').textContent = `${h}:${m}:${sec}`;
+}
+setInterval(tickUptime, 1000);
+tickUptime();
+
+// ══════════════════════════════════════════════════════════════════════════
+// SYS-01 · THE EYE — face-recon grid
+// ══════════════════════════════════════════════════════════════════════════
+(function initEye() {
+  const canvas = $('eye-canvas');
+  const info   = $('eye-info');
+  const ctx    = canvas.getContext('2d');
+
+  const COLS = 4, ROWS = 2;
+  const TARGET_CONFIDENCE = .92;
+
+  /* Simulated camera feeds */
+  const feeds = Array.from({length: COLS * ROWS}, (_, i) => ({
+    id: `CAM-${String(i + 1).padStart(2, '0')}`,
+    noise: Math.random() * 0.4,
+    color: `hsl(${100 + i * 30}, 70%, 40%)`,
+    face: {
+      x: rand(.15, .6), y: rand(.1, .5),
+      w: rand(.25, .38), h: rand(.3, .42),
+      conf: rand(.78, .99),
+      dx: (Math.random() - .5) * .002,
+      dy: (Math.random() - .5) * .002,
+    },
+    glitching: false,
+    glitchTimer: 0,
+  }));
+
+  let frame = 0;
+
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width  = rect.width  || 300;
+    canvas.height = rect.height || 200;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function drawFeed(feed, x, y, w, h) {
+    const c = ctx;
+
+    // Background noise / static
+    const imageData = c.createImageData(w, h);
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = Math.floor(rand(0, 30) + (feed.glitching ? rand(0, 80) : 0));
+      d[i] = d[i+1] = d[i+2] = v;
+      d[i+3] = 255;
+    }
+    c.putImageData(imageData, x, y);
+
+    // Subtle grid lines (CCTV aesthetic)
+    c.save();
+    c.strokeStyle = 'rgba(57,255,20,.06)';
+    c.lineWidth = .5;
+    for (let gx = x; gx < x + w; gx += 16) {
+      c.beginPath(); c.moveTo(gx, y); c.lineTo(gx, y + h); c.stroke();
+    }
+    for (let gy = y; gy < y + h; gy += 16) {
+      c.beginPath(); c.moveTo(x, gy); c.lineTo(x + w, gy); c.stroke();
+    }
+    c.restore();
+
+    // Face bounding box
+    const f = feed.face;
+    const fx = x + f.x * w, fy = y + f.y * h;
+    const fw = f.w * w,      fh = f.h * h;
+    const high = f.conf >= TARGET_CONFIDENCE;
+
+    c.save();
+    c.strokeStyle = high ? 'rgba(57,255,20,.9)' : 'rgba(255,183,3,.85)';
+    c.lineWidth = 1.2;
+    const cs = 8; // corner size
+    // Draw corner bracket box
+    [[0,0],[1,0],[0,1],[1,1]].forEach(([cx, cy]) => {
+      const bx = fx + cx * fw, by = fy + cy * fh;
+      const sx = cx === 0 ? 1 : -1, sy = cy === 0 ? 1 : -1;
+      c.beginPath();
+      c.moveTo(bx + sx * cs, by);
+      c.lineTo(bx, by);
+      c.lineTo(bx, by + sy * cs);
+      c.stroke();
+    });
+
+    // Confidence label
+    c.fillStyle = high ? 'rgba(57,255,20,.9)' : 'rgba(255,183,3,.85)';
+    c.font = `${Math.max(8, w * .06)}px monospace`;
+    c.fillText(`${(f.conf * 100).toFixed(1)}%`, fx, fy - 4);
+    c.restore();
+
+    // CAM ID overlay
+    c.save();
+    c.fillStyle = 'rgba(57,255,20,.7)';
+    c.font = `${Math.max(7, w * .055)}px monospace`;
+    c.fillText(feed.id, x + 4, y + Math.max(10, w * .075));
+    c.restore();
+
+    // Timestamp
+    const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    c.save();
+    c.fillStyle = 'rgba(57,255,20,.5)';
+    c.font = `${Math.max(6, w * .05)}px monospace`;
+    c.fillText(ts, x + 4, y + h - 4);
+    c.restore();
+  }
+
+  function animateEye() {
+    frame++;
+    const W = canvas.width, H = canvas.height;
+    const cw = Math.floor(W / COLS), ch = Math.floor(H / ROWS);
+
+    feeds.forEach((feed, i) => {
+      const col = i % COLS, row = Math.floor(i / COLS);
+      // Drift face box
+      feed.face.x = clamp(feed.face.x + feed.face.dx, .05, .55);
+      feed.face.y = clamp(feed.face.y + feed.face.dy, .05, .45);
+      // Slowly vary confidence
+      feed.face.conf = clamp(feed.face.conf + (Math.random() - .5) * .003, .75, .99);
+      // Random glitch
+      if (!feed.glitching && Math.random() < .003) { feed.glitching = true; feed.glitchTimer = 8; }
+      if (feed.glitching) { if (--feed.glitchTimer <= 0) feed.glitching = false; }
+
+      drawFeed(feed, col * cw, row * ch, cw, ch);
+    });
+
+    // Divider lines
+    ctx.strokeStyle = 'rgba(0,229,255,.25)';
+    ctx.lineWidth = 1;
+    for (let c = 1; c < COLS; c++) {
+      ctx.beginPath(); ctx.moveTo(c * cw, 0); ctx.lineTo(c * cw, H); ctx.stroke();
+    }
+    for (let r = 1; r < ROWS; r++) {
+      ctx.beginPath(); ctx.moveTo(0, r * ch); ctx.lineTo(W, r * ch); ctx.stroke();
+    }
+
+    // Info readout
+    const detected = feeds.filter(f => f.face.conf >= TARGET_CONFIDENCE).length;
+    info.textContent = `DETECTED: ${detected}/${feeds.length}  THREATS: 0  AUTOSEC: ARMED`;
+
+    requestAnimationFrame(animateEye);
+  }
+  animateEye();
+})();
+
+// ══════════════════════════════════════════════════════════════════════════
+// SYS-02 · THE VOICE — waveform oscilloscope + VU meters
+// ══════════════════════════════════════════════════════════════════════════
+(function initVoice() {
+  const canvas = $('wave-canvas');
+  const ctx    = canvas.getContext('2d');
+
+  // Meter state — slowly drift
+  const meters = [
+    { el: $('m-gain'),  val: $('v-gain'),  pct: 72, label: v => `${(v * -.28 - 0.2).toFixed(1)} dB`, fill: 'fill-cyan' },
+    { el: $('m-drive'), val: $('v-drive'), pct: 45, label: v => `  ${v}%`,                            fill: 'fill-amber' },
+    { el: $('m-reverb'),val: $('v-reverb'),pct: 33, label: v => `  ${v}%`,                            fill: 'fill-violet' },
+    { el: $('m-delay'), val: $('v-delay'), pct: 58, label: v => `${Math.round(v * 7.24)} ms`,         fill: 'fill-green' },
+    { el: $('m-mix'),   val: $('v-mix'),   pct: 88, label: v => ` ${Math.round((v - 100) * .12)} dBFS`, fill: 'fill-red' },
+  ];
+
+  // Phase accumulators for a rich guitar-like composite wave
+  let φ1 = 0, φ2 = 0, φ3 = 0;
+
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width  = rect.width  || 200;
+    canvas.height = 80;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  function animateVoice() {
+    // Drift meters
+    meters.forEach(m => {
+      m.pct = clamp(m.pct + (Math.random() - .5) * 1.5, 5, 98);
+      m.el.style.width = m.pct + '%';
+      m.val.textContent = m.label(Math.round(m.pct));
+    });
+
+    // Oscilloscope
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    const drive = meters[1].pct / 100;
+    φ1 += .08; φ2 += .031; φ3 += .053;
+
+    // Glow layer
+    ctx.save();
+    ctx.shadowColor  = 'rgba(0,229,255,.7)';
+    ctx.shadowBlur   = 8;
+    ctx.strokeStyle  = 'rgba(0,229,255,.85)';
+    ctx.lineWidth    = 1.5;
+    ctx.beginPath();
+    for (let px = 0; px < W; px++) {
+      const t = (px / W) * Math.PI * 12;
+      let amp = .3 * Math.sin(t + φ1)
+              + .15 * Math.sin(2.1 * t + φ2)
+              + .07 * Math.sin(3.7 * t + φ3);
+      // Soft clip for overdriven feel
+      amp = amp * (1 + drive * 1.4);
+      amp = Math.tanh(amp);
+      const py = H / 2 - amp * H * .38;
+      px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Dim secondary harmonic
+    ctx.save();
+    ctx.strokeStyle = 'rgba(191,95,255,.4)';
+    ctx.lineWidth   = .8;
+    ctx.beginPath();
+    for (let px = 0; px < W; px++) {
+      const t  = (px / W) * Math.PI * 24;
+      const amp = .12 * Math.sin(t + φ1 * 2) * Math.tanh(drive * 2);
+      const py = H / 2 - amp * H * .38;
+      px === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // Centre line
+    ctx.strokeStyle = 'rgba(255,255,255,.05)';
+    ctx.lineWidth = .5;
+    ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke();
+
+    requestAnimationFrame(animateVoice);
+  }
+  animateVoice();
+})();
+
+// ══════════════════════════════════════════════════════════════════════════
+// SYS-03 · THE TONGUE — AI_shell terminal typewriter
+// ══════════════════════════════════════════════════════════════════════════
+(function initTongue() {
+  const terminal = $('terminal');
+
+  const SESSIONS = [
+    { type: 'prompt', text: 'ai_shell --mode=decrypt --depth=7' },
+    { type: 'out',    text: 'Initializing AI_shell v3.1.0 (Constantine Universe)' },
+    { type: 'info',   text: '[ OK ] Torch backend loaded — CUDA:0 (RTX 4090, 24 GB)' },
+    { type: 'info',   text: '[ OK ] LLM model: constantine-7b-q4_K_M  →  context 16 384 tokens' },
+    { type: 'out',    text: '' },
+    { type: 'prompt', text: 'scan --target=CORP_GATEWAY --protocol=tcp' },
+    { type: 'out',    text: 'Scanning 10.0.0.1/24  [SYN-ACK stealth]' },
+    { type: 'out',    text: '  80/tcp   open  http    nginx/1.24.0' },
+    { type: 'out',    text: '  443/tcp  open  https   TLSv1.3 (AES-256-GCM)' },
+    { type: 'warn',   text: '  8443/tcp open  UNKNOWN  → flagged for analysis' },
+    { type: 'out',    text: '  22/tcp   closed' },
+    { type: 'out',    text: '' },
+    { type: 'prompt', text: 'analyse --port=8443 --output=json' },
+    { type: 'out',    text: 'Running deep packet inspection…' },
+    { type: 'info',   text: '{ "service": "corp-backdoor", "version": "2.3.1", "vuln": true }' },
+    { type: 'err',    text: '! THREAT DETECTED — corp-backdoor on 10.0.0.1:8443' },
+    { type: 'out',    text: '' },
+    { type: 'prompt', text: 'patch --apply=ghost_coder.patch --verify' },
+    { type: 'out',    text: 'Applying Ghost Coder patch set (12 hunks)…' },
+    { type: 'out',    text: '  Hunk 1/12 → processBlock() … OK' },
+    { type: 'out',    text: '  Hunk 2/12 → IRLoader::loadFile() … OK' },
+    { type: 'out',    text: '  Hunk 7/12 → NetworkLayer::connect() … OK' },
+    { type: 'ok',     text: '  All 12 hunks applied cleanly.' },
+    { type: 'ok',     text: '[ VERIFIED ] SHA-256 match — patch authentic.' },
+    { type: 'out',    text: '' },
+    { type: 'prompt', text: 'broadcast --channel=open_signal --encrypt=AES256' },
+    { type: 'out',    text: 'Encoding payload…  [████████████████████] 100%' },
+    { type: 'info',   text: 'Open Signal transmitted on 40.740 MHz / HTTPS / Tor' },
+    { type: 'ok',     text: '[ MISSION ] Phase III complete — The Open Signal is live.' },
+    { type: 'out',    text: '' },
+  ];
+
+  let si = 0, ci = 0;
+  let currentEl = null;
+
+  function addLine(type, text) {
+    const span = document.createElement('span');
+    span.className = `t-line t-${type}`;
+    if (type === 'prompt') {
+      span.innerHTML = '<span class="t-prompt">constantine@lab:~$</span> <span class="t-cmd"></span>';
+      currentEl = span.querySelector('.t-cmd');
+    } else {
+      currentEl = span;
+    }
+    terminal.appendChild(span);
+    terminal.scrollTop = terminal.scrollHeight;
+    return span;
+  }
+
+  function typeNext() {
+    if (si >= SESSIONS.length) {
+      // Restart with cursor
+      si = 0;
+      const cur = document.createElement('span');
+      cur.className = 't-line t-prompt t-cursor';
+      cur.innerHTML = '<span class="t-prompt">constantine@lab:~$</span> ';
+      terminal.appendChild(cur);
+      setTimeout(() => {
+        // Clear and restart loop
+        terminal.innerHTML = '';
+        si = 0; ci = 0; currentEl = null;
+        typeNext();
+      }, 3500);
+      return;
+    }
+
+    const item = SESSIONS[si];
+
+    if (ci === 0) {
+      addLine(item.type, '');
+    }
+
+    if (ci < item.text.length) {
+      currentEl.textContent += item.text[ci];
+      ci++;
+      const delay = item.type === 'prompt' ? rand(30, 80) : rand(4, 18);
+      setTimeout(typeNext, delay);
+    } else {
+      si++; ci = 0;
+      const pause = item.type === 'prompt' ? rand(300, 700)
+                  : item.text === ''       ? 80
+                  : rand(50, 180);
+      setTimeout(typeNext, pause);
+    }
+  }
+
+  typeNext();
+})();
+
+// ══════════════════════════════════════════════════════════════════════════
+// SYS-04 · THE PULSE — DJ Python Mixer patchbay
+// ══════════════════════════════════════════════════════════════════════════
+(function initPulse() {
+  const canvas = $('pulse-canvas');
+  const ctx    = canvas.getContext('2d');
+
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width  = rect.width  || 300;
+    canvas.height = rect.height || 220;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Nodes: sources (left) → processors (center) → outputs (right)
+  const SOURCES = ['MIC_IN', 'GUITAR', 'SYNTH', 'LOOP_A', 'LOOP_B'];
+  const PROCS   = ['DSP_FX', 'EQ_7B',  'COMP',  'LIMTR'];
+  const OUTS    = ['MASTER', 'MON_A',  'MON_B', 'REC'];
+
+  // Connections with animated "packet" travel
+  const connections = [
+    { from: [0,0], to: [1,0], color: '#00e5ff' },
+    { from: [0,1], to: [1,0], color: '#00e5ff' },
+    { from: [0,2], to: [1,1], color: '#bf5fff' },
+    { from: [0,3], to: [1,2], color: '#39ff14' },
+    { from: [0,4], to: [1,3], color: '#39ff14' },
+    { from: [1,0], to: [2,0], color: '#00e5ff' },
+    { from: [1,1], to: [2,0], color: '#bf5fff' },
+    { from: [1,2], to: [2,1], color: '#39ff14' },
+    { from: [1,3], to: [2,2], color: '#ffb703' },
+    { from: [1,0], to: [2,3], color: '#ff3b5c' },
+  ].map(c => ({ ...c, t: Math.random() })); // t = packet position 0..1
+
+  const GROUPS = [SOURCES, PROCS, OUTS];
+  const COL_COUNT = 3;
+
+  let frame = 0;
+
+  function nodePos(group, index, W, H) {
+    const cols = GROUPS.map((g, gi) => (gi + 1) / (COL_COUNT + 1) * W);
+    const total = GROUPS[group].length;
+    const spacing = H / (total + 1);
+    return { x: cols[group], y: spacing * (index + 1) };
+  }
+
+  function animatePulse() {
+    frame++;
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Background grid
+    ctx.strokeStyle = 'rgba(255,255,255,.03)';
+    ctx.lineWidth = .5;
+    for (let gx = 0; gx < W; gx += 20) {
+      ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+    }
+    for (let gy = 0; gy < H; gy += 20) {
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+    }
+
+    // Draw connections with animated packets
+    connections.forEach(conn => {
+      conn.t = (conn.t + .004) % 1;
+      const [sg, si2] = conn.from, [dg, di] = conn.to;
+      const src = nodePos(sg, si2, W, H);
+      const dst = nodePos(dg, di, W, H);
+
+      // Cable
+      ctx.save();
+      ctx.strokeStyle = conn.color + '44';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      ctx.beginPath();
+      const mx = (src.x + dst.x) / 2;
+      ctx.moveTo(src.x, src.y);
+      ctx.bezierCurveTo(mx, src.y, mx, dst.y, dst.x, dst.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // Packet travelling along bezier
+      const t = conn.t;
+      const px = (1-t)**3*src.x + 3*(1-t)**2*t*mx + 3*(1-t)*t**2*mx + t**3*dst.x;
+      const py = (1-t)**3*src.y + 3*(1-t)**2*t*src.y + 3*(1-t)*t**2*dst.y + t**3*dst.y;
+      ctx.save();
+      ctx.shadowColor = conn.color;
+      ctx.shadowBlur  = 8;
+      ctx.fillStyle   = conn.color;
+      ctx.beginPath();
+      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // Draw nodes
+    GROUPS.forEach((group, gi) => {
+      group.forEach((label, idx) => {
+        const { x, y } = nodePos(gi, idx, W, H);
+        const colors = [
+          ['rgba(0,229,255,.9)', 'rgba(0,229,255,.15)'],
+          ['rgba(191,95,255,.9)', 'rgba(191,95,255,.15)'],
+          ['rgba(255,183,3,.9)',  'rgba(255,183,3,.15)'],
+        ][gi];
+
+        // Node circle
+        ctx.save();
+        ctx.shadowColor = colors[0];
+        ctx.shadowBlur  = 12;
+        ctx.beginPath();
+        ctx.arc(x, y, 14, 0, Math.PI * 2);
+        ctx.fillStyle = colors[1];
+        ctx.fill();
+        ctx.strokeStyle = colors[0];
+        ctx.lineWidth   = 1.2;
+        ctx.stroke();
+        ctx.restore();
+
+        // Label
+        ctx.save();
+        ctx.fillStyle = colors[0];
+        ctx.font      = `${Math.max(7, W * .025)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, y);
+        ctx.restore();
+      });
+    });
+
+    // Column headers
+    ['SOURCES', 'PROCESSORS', 'OUTPUTS'].forEach((h, gi) => {
+      const { x } = nodePos(gi, 0, W, H);
+      ctx.save();
+      ctx.fillStyle   = 'rgba(255,255,255,.15)';
+      ctx.font        = `${Math.max(7, W * .022)}px monospace`;
+      ctx.textAlign   = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(h, x, 6);
+      ctx.restore();
+    });
+
+    requestAnimationFrame(animatePulse);
+  }
+  animatePulse();
+})();
+
+// ══════════════════════════════════════════════════════════════════════════
+// SYS-05 · THE MIND — code viewer (ai_shell.py) with active-line scroll
+// ══════════════════════════════════════════════════════════════════════════
+(function initMind() {
+  const container = $('code-lines');
+
+  // Real-looking Python source for the AI shell
+  const SOURCE = [
+    ['cm', '#!/usr/bin/env python3'],
+    ['cm', '# ai_shell.py — Constantine Universe Hidden Network'],
+    ['cm', '# Natural language → system actions bridge'],
+    ['pn', ''],
+    ['kw', 'import', ' os, sys, json, asyncio, hashlib'],
+    ['kw', 'from', ' pathlib ', 'kw', 'import', ' Path'],
+    ['kw', 'from', ' dataclasses ', 'kw', 'import', ' dataclass, field'],
+    ['kw', 'from', ' typing ', 'kw', 'import', ' AsyncIterator, Optional'],
+    ['pn', ''],
+    ['kw', 'import', ' torch'],
+    ['kw', 'from', ' transformers ', 'kw', 'import', ' AutoTokenizer, AutoModelForCausalLM'],
+    ['pn', ''],
+    ['cm', '# ── Configuration ─────────────────────────────────────────────'],
+    ['pn', ''],
+    ['dc', '@dataclass'],
+    ['kw', 'class', ' ', 'tp', 'ShellConfig'],
+    ['pn', ':'],
+    ['pn', '    model_id:  str  = ', 'st', '"constantine-7b-q4_K_M"'],
+    ['pn', '    device:    str  = ', 'st', '"cuda:0"'],
+    ['pn', '    ctx_len:   int  = ', 'nm', '16384'],
+    ['pn', '    max_new:   int  = ', 'nm', '512'],
+    ['pn', '    temp:     float = ', 'nm', '0.7'],
+    ['pn', '    top_p:    float = ', 'nm', '0.9'],
+    ['pn', ''],
+    ['cm', '# ── Core Shell ─────────────────────────────────────────────────'],
+    ['pn', ''],
+    ['kw', 'class', ' ', 'tp', 'AIShell'],
+    ['pn', ':'],
+    ['pn', '    ', 'kw', 'def', ' ', 'fn', '__init__', '(', 'kw', 'self', ', cfg: ', 'tp', 'ShellConfig', ' = ', 'tp', 'ShellConfig', '()):'],
+    ['pn', '        ', 'kw', 'self', '.cfg    = cfg'],
+    ['pn', '        ', 'kw', 'self', '.model  = ', 'kw', 'None'],
+    ['pn', '        ', 'kw', 'self', '.tok    = ', 'kw', 'None'],
+    ['pn', '        ', 'kw', 'self', '.history: list = []'],
+    ['pn', ''],
+    ['pn', '    ', 'kw', 'async def', ' ', 'fn', 'load', '(', 'kw', 'self', '):'],
+    ['pn', '        print(', 'st', '"[ .. ] Loading model…"', ')'],
+    ['pn', '        ', 'kw', 'self', '.tok = ', 'tp', 'AutoTokenizer', '.from_pretrained(', 'kw', 'self', '.cfg.model_id)'],
+    ['pn', '        ', 'kw', 'self', '.model = ', 'tp', 'AutoModelForCausalLM', '.from_pretrained('],
+    ['pn', '            ', 'kw', 'self', '.cfg.model_id,'],
+    ['pn', '            device_map=', 'st', '"auto"', ','],
+    ['pn', '            torch_dtype=torch.float16,'],
+    ['pn', '        )'],
+    ['pn', '        print(', 'st', '"[ OK ] Model ready."', ')'],
+    ['pn', ''],
+    ['pn', '    ', 'kw', 'async def', ' ', 'fn', 'stream', '(', 'kw', 'self', ', prompt: str) -> ', 'tp', 'AsyncIterator', '[str]:'],
+    ['pn', '        ids = ', 'kw', 'self', '.tok(prompt, return_tensors=', 'st', '"pt"', ').input_ids.to(', 'kw', 'self', '.cfg.device)'],
+    ['pn', '        ', 'kw', 'with', ' torch.no_grad():'],
+    ['pn', '            out = ', 'kw', 'self', '.model.generate('],
+    ['pn', '                ids,'],
+    ['pn', '                max_new_tokens=', 'kw', 'self', '.cfg.max_new,'],
+    ['pn', '                temperature=', 'kw', 'self', '.cfg.temp,'],
+    ['pn', '                top_p=', 'kw', 'self', '.cfg.top_p,'],
+    ['pn', '                do_sample=', 'kw', 'True', ','],
+    ['pn', '                streamer=', 'kw', 'self', '._streamer(),'],
+    ['pn', '            )'],
+    ['pn', '        ', 'kw', 'async for', ' token ', 'kw', 'in', ' ', 'kw', 'self', '._stream_queue:'],
+    ['pn', '            ', 'kw', 'yield', ' token'],
+    ['pn', ''],
+    ['pn', '    ', 'kw', 'def', ' ', 'fn', '_sign', '(', 'kw', 'self', ', payload: bytes) -> str:'],
+    ['pn', '        secret = os.getenv(', 'st', '"CONSTANTINE_KEY"', ', ', 'st', '""', ')'],
+    ['pn', '        ', 'kw', 'return', ' hashlib.blake2b(payload, key=secret.encode()[:32]).hexdigest()'],
+    ['pn', ''],
+    ['cm', '# ── CLI entry-point ────────────────────────────────────────────'],
+    ['pn', ''],
+    ['kw', 'async def', ' ', 'fn', 'main', '():'],
+    ['pn', '    shell = ', 'tp', 'AIShell', '()'],
+    ['pn', '    ', 'kw', 'await', ' shell.', 'fn', 'load', '()'],
+    ['pn', '    ', 'kw', 'while', ' ', 'kw', 'True', ':'],
+    ['pn', '        cmd = input(', 'st', '"constantine@lab:~$ "', ')'],
+    ['pn', '        ', 'kw', 'async for', ' token ', 'kw', 'in', ' shell.', 'fn', 'stream', '(cmd):'],
+    ['pn', '            print(token, end=', 'st', '""', ', flush=', 'kw', 'True', ')'],
+    ['pn', '        print()'],
+    ['pn', ''],
+    ['kw', 'if', ' __name__ == ', 'st', '"__main__"', ':'],
+    ['pn', '    asyncio.run(', 'fn', 'main', '())'],
+  ];
+
+  // Render source lines with syntax highlighting
+  SOURCE.forEach((parts, i) => {
+    const row  = document.createElement('div');
+    row.className = 'code-line';
+    row.dataset.line = i;
+
+    const ln = document.createElement('span');
+    ln.className = 'ln';
+    ln.textContent = String(i + 1).padStart(3, ' ');
+
+    const lc = document.createElement('span');
+    lc.className = 'lc';
+
+    // Parts alternate: class, text, class, text…
+    for (let pi = 0; pi < parts.length; pi += 2) {
+      const cls  = parts[pi];
+      const text = parts[pi + 1] || '';
+      const span = document.createElement('span');
+      if (cls && cls !== 'pn') span.className = cls;
+      span.textContent = text;
+      lc.appendChild(span);
+    }
+
+    row.appendChild(ln);
+    row.appendChild(lc);
+    container.appendChild(row);
+  });
+
+  // Scroll the active line slowly
+  let activeLine = 0;
+  const rows = container.querySelectorAll('.code-line');
+
+  function advanceLine() {
+    rows[activeLine]?.classList.remove('line-active');
+    activeLine = (activeLine + 1) % rows.length;
+    rows[activeLine]?.classList.add('line-active');
+    rows[activeLine]?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    setTimeout(advanceLine, rand(200, 600));
+  }
+  setTimeout(advanceLine, 1000);
+})();
+
+// ══════════════════════════════════════════════════════════════════════════
+// METRICS — CPU, memory, latency, tokens, network
+// ══════════════════════════════════════════════════════════════════════════
+(function initMetrics() {
+  const HIST = 40;
+  const cpu = { val: 42, hist: Array(HIST).fill(42) };
+  const mem = { val: 61, hist: Array(HIST).fill(61) };
+  const tok = { val: 380, hist: Array(HIST).fill(380) };
+
+  function sparkDraw(canvasId, hist, color) {
+    const canvas = $(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.offsetWidth || 80, H = canvas.offsetHeight || 22;
+    if (canvas.width !== W) canvas.width = W;
+    if (canvas.height !== H) canvas.height = H;
+    ctx.clearRect(0, 0, W, H);
+
+    const mn = Math.min(...hist), mx = Math.max(...hist) || 1;
+    ctx.strokeStyle = color;
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    hist.forEach((v, i) => {
+      const x = (i / (hist.length - 1)) * W;
+      const y = H - ((v - mn) / (mx - mn + .001)) * (H - 2) - 1;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+
+  function tickMetrics() {
+    cpu.val = clamp(cpu.val + (Math.random() - .5) * 8, 5, 98);
+    mem.val = clamp(mem.val + (Math.random() - .5) * 3, 40, 95);
+    tok.val = clamp(tok.val + (Math.random() - .5) * 60, 80, 700);
+    const lat = rand(1.1, 4.8);
+    const txKB = rand(2, 180), rxKB = rand(5, 320);
+
+    cpu.hist.push(cpu.val); if (cpu.hist.length > HIST) cpu.hist.shift();
+    mem.hist.push(mem.val); if (mem.hist.length > HIST) mem.hist.shift();
+    tok.hist.push(tok.val); if (tok.hist.length > HIST) tok.hist.shift();
+
+    $('cpu-val').textContent  = Math.round(cpu.val) + '%';
+    $('mem-val').textContent  = Math.round(mem.val) + '%';
+    $('lat-val').textContent  = lat.toFixed(1) + ' ms';
+    $('tok-val').textContent  = Math.round(tok.val) + '/s';
+    $('net-val').textContent  = Math.round(txKB + rxKB) + ' KB/s';
+    $('net-sub').textContent  = `↑ ${Math.round(txKB)} KB/s  ↓ ${Math.round(rxKB)} KB/s`;
+
+    // Colour CPU red if high
+    $('cpu-val').className = 'metric-value ' + (cpu.val > 80 ? 'mv-red' : 'mv-cyan');
+    $('lat-val').className = 'metric-value ' + (lat > 3.5 ? 'mv-red' : 'mv-amber');
+
+    sparkDraw('sp-cpu', cpu.hist, cpu.val > 80 ? '#ff3b5c' : '#00e5ff');
+    sparkDraw('sp-mem', mem.hist, '#39ff14');
+    sparkDraw('sp-tok', tok.hist, '#bf5fff');
+  }
+  setInterval(tickMetrics, 800);
+  tickMetrics();
+})();
+</script>
+</body>
+</html>
